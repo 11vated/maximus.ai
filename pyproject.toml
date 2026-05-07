@@ -1,0 +1,58 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "maximus"
+version = "0.1.0"
+description = "Maximus.ai - 100% Free, Unlimited, Capable Coding Agent"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [
+    {name = "11vated", email = "ai@maximus.ai"}
+]
+
+dependencies = [
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    "rich>=13.0",
+    "click>=8.0",
+    "tenacity>=8.0",
+    "pyyaml>=6.0",
+    "python-dotenv>=1.0",
+    "openai>=1.0",
+    "anthropic>=0.50",
+    "fastapi>=0.104",
+    "uvicorn>=0.24",
+    "aiohttp>=3.9",
+    "prometheus-client>=0.19",
+    "pygments>=2.15",
+]
+
+[project.optional-dependencies]
+tui = ["textual>=1.0"]
+vector = ["chromadb>=0.4", "duckduckgo-search>=7.0"]
+all = ["tui", "vector"]
+
+[project.scripts]
+maximus = "maximus.cli:cli"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/maximus"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+select = ["E", "W", "F", "I", "B", "C4", "UP"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-vvv --tb=short"
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
