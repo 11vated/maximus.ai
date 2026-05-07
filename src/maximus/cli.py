@@ -110,9 +110,11 @@ def status():
     import sys
     console.print(f"[green]OK[/green] Python {sys.version_info.major}.{sys.version_info.minor}")
 
-    # Check directories
+    # Check directories - use package location
+    package_root = Path(__file__).parent.parent.parent
     for d in ["src/maximus", "tests", "docs"]:
-        if Path(d).exists():
+        full_path = package_root / d
+        if full_path.exists():
             console.print(f"[green]OK[/green] {d} exists")
         else:
             console.print(f"[red]FAIL[/red] {d} missing")

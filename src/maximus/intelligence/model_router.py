@@ -100,7 +100,7 @@ DEFAULT_MODELS = {
     ),
     "phi3.5:3.8b": ModelConfig(
         name="phi3.5:3.8b",
-        recommended_for=[TaskIntent.GENERAL, TaskIntent.SIMPLE],
+        recommended_for=[TaskIntent.GENERAL, TaskIntent.EXPLORATION],
         max_tokens=4096,
         temperature=0.7
     ),
