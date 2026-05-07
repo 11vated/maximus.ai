@@ -11,12 +11,14 @@ from maximus.tools.builtin.python_runner import PythonRunnerTool
 from maximus.tools.builtin.node_runner import NodeRunnerTool
 from maximus.tools.builtin.git_tools import GitStatusTool, GitDiffTool, GitCommitTool, GitAddTool, GitPushTool
 from maximus.tools.builtin.web_search import WebSearchTool
+from maximus.tools.builtin.web_fetch import WebFetchTool
 from maximus.tools.builtin.test_runner import TestRunnerTool
 from maximus.tools.builtin.file_ops import MoveFileTool, CopyFileTool, DeleteFileTool
 from maximus.tools.builtin.browser_tool import BrowserTool
 from maximus.tools.builtin.scheduler_tools import SleepTool, DateTimeTool
 from maximus.tools.builtin.system_tools import EnvInfoTool, SystemInfoTool, CreateDirTool, ListProcessesTool
 from maximus.tools.builtin.task_tools import TodoWriteTool, TodoReadTool, TaskCreateTool, TaskUpdateTool, TaskStopTool, TaskListTool
+from maximus.tools.builtin.multi_edit import MultiEditTool
 
 # Repo analysis tools
 from maximus.adapters.open_swe_adapter import AnalyzeOpenSweTool
@@ -32,6 +34,7 @@ def register_builtin_tools():
     register_tool(ReadFileTool())
     register_tool(WriteFileTool())
     register_tool(EditFileTool())
+    register_tool(MultiEditTool())  # NEW: Multi-file atomic edits
     register_tool(GrepTool())
     register_tool(GlobTool())
     register_tool(LsTool())
@@ -43,6 +46,7 @@ def register_builtin_tools():
     register_tool(GitAddTool())
     register_tool(GitPushTool())
     register_tool(WebSearchTool())
+    register_tool(WebFetchTool())  # NEW: Web content fetching
     register_tool(TestRunnerTool())
     register_tool(MoveFileTool())
     register_tool(CopyFileTool())

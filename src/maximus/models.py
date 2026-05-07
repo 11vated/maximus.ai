@@ -163,6 +163,7 @@ class EventType(str, Enum):
     TURN_DONE = "turn_done"
     PERMISSION_REQUEST = "permission_request"
     STATE_CHANGE = "state_change"
+    ERROR = "error"
 
 
 class Event(BaseModel):

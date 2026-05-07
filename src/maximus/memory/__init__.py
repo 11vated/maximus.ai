@@ -1,6 +1,31 @@
-"""Memory systems for Maximus.ai."""
+"""Memory systems for Maximus.ai - MemoryMesh + legacy support."""
 
 from maximus.memory.short_term import ShortTermMemory
 from maximus.memory.long_term import LongTermMemory
+from maximus.memory.memory_mesh import (
+    MemoryMesh,
+    MemoryBank,
+    MemoryScope,
+    KnowledgeLayer,
+    MemoryEntry,
+    Memdir,
+    EpisodicMemory,
+    SemanticMemory,
+    ProceduralMemory,
+    WorkingMemory,
+)
 
-__all__ = ["ShortTermMemory", "LongTermMemory"]
+__all__ = [
+    "MemoryMesh",
+    "MemoryBank",
+    "MemoryScope", 
+    "KnowledgeLayer",
+    "MemoryEntry",
+    "Memdir",
+    "ShortTermMemory",
+    "LongTermMemory",
+    "EpisodicMemory",
+    "SemanticMemory",
+    "ProceduralMemory",
+    "WorkingMemory",
+]

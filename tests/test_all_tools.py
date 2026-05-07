@@ -11,7 +11,8 @@ register_builtin_tools()
 register_repo_tools()
 
 ALL_TOOL_NAMES = registry.list_tools()
-assert len(ALL_TOOL_NAMES) == 35, f"Expected 35 tools, got {len(ALL_TOOL_NAMES)}"
+# Expected: 35 base tools + 2 new (multi_edit, web_fetch) = 37
+assert len(ALL_TOOL_NAMES) == 37, f"Expected 37 tools, got {len(ALL_TOOL_NAMES)}"
 
 
 @pytest.mark.parametrize("tool_name", ALL_TOOL_NAMES)

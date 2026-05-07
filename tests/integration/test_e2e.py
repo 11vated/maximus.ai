@@ -61,10 +61,9 @@ class TestAgentInitialization:
     def test_tool_registration(self, agent_loop: AgentLoop):
         """Test that tools are properly registered."""
         registry = get_registry()
-        tools = registry.list_tools()
-        assert len(tools) > 0
+        tool_names = registry.list_tools()
+        assert len(tool_names) > 0
 
-        tool_names = [t.name for t in tools]
         required_tools = [
             "read_file", "write_file", "execute_shell", "grep", "ls",
             "glob", "edit_file",
@@ -112,6 +111,7 @@ class TestAgentExecution:
         assert agent_loop.state == CognitiveState.PAUSE
 
     @pytest.mark.asyncio
+    @pytest.mark.skip(reason="Requires Ollama running")
     async def test_tool_use_flow(self, agent_loop: AgentLoop):
         """Test agent using a tool."""
         events: List[Event] = []
