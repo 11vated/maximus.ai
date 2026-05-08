@@ -142,7 +142,9 @@ class CommandClassifier:
     
     # Safe patterns - auto-allow
     SAFE_PATTERNS = [
+        r"^ls$",
         r"ls\s",
+        r"^cat$",
         r"cat\s",
         r"grep\s",
         r"find\s",
@@ -422,3 +424,91 @@ def get_permission_classifier() -> PermissionClassifier:
     if _permission_classifier is None:
         _permission_classifier = PermissionClassifier()
     return _permission_classifier
+
+
+# === Enhanced Trust Layer (UOSA Phase 4) ===
+
+import asyncio
+from dataclasses import dataclass
+from typing import Set
+
+@dataclass
+class SecurityRule:
+    """A security rule for the trust layer."""
+    id: str
+    name: str
+    description: str
+    pattern: str
+    action: str
+    severity: str
+
+
+@dataclass
+class SecurityCheck:
+    """Result of a security check."""
+    passed: bool
+    rule_id: str = ""
+    message: str = ""
+    severity: str = "low"
+
+
+class EnhancedTrustLayer:
+    """Enhanced trust layer for UOSA - command validation and package scanning."""
+    
+    def __init__(self):
+        self._rules = self._load_rules()
+        self._stats = {
+            "commands_checked": 0,
+            "commands_blocked": 0,
+            "packages_checked": 0,
+            "packages_blocked": 0
+        }
+        # Load known vulnerable packages
+        self._vulnerable = {"pyyaml<5.4", "django<3.2.10", "flask<2.0.1"}
+    
+    def _load_rules(self):
+        import re
+        return [
+            ("no_root_delete", r"rm\s+-rf\s+/", "deny", "critical"),
+            ("no_device_write", r">\s*/dev/", "deny", "high"),
+            ("no_curl_pipe", r"curl.*\|\s*sh", "deny", "high"),
+            ("warn_sudo", r"sudo\s+", "warn", "medium"),
+        ]
+    
+    async def check_command(self, command: str) -> dict:
+        """Check command against security rules."""
+        self._stats["commands_checked"] += 1
+        
+        for rule_id, pattern, action, severity in self._rules:
+            import re
+            if re.search(pattern, command):
+                if action == "deny":
+                    self._stats["commands_blocked"] += 1
+                    return {"allowed": False, "message": f"Blocked: {rule_id}", "severity": severity}
+                elif action == "warn":
+                    return {"allowed": True, "message": f"Warning: {rule_id}", "severity": severity}
+        
+        return {"allowed": True}
+    
+    async def check_package(self, package: str, version: str = None) -> dict:
+        """Check package for vulnerabilities."""
+        self._stats["packages_checked"] += 1
+        
+        check_key = f"{package}<{version}" if version else package
+        if check_key in self._vulnerable:
+            self._stats["packages_blocked"] += 1
+            return {"allowed": False, "message": f"Vulnerable: {package}"}
+        
+        return {"allowed": True}
+    
+    def get_stats(self):
+        return self._stats
+
+
+_enhanced_trust: EnhancedTrustLayer = None
+
+def get_enhanced_trust_layer() -> EnhancedTrustLayer:
+    global _enhanced_trust
+    if _enhanced_trust is None:
+        _enhanced_trust = EnhancedTrustLayer()
+    return _enhanced_trust

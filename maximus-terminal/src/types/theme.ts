@@ -12,6 +12,7 @@ export interface ThemeConfig {
   font: string;
   effects: ThemeEffects;
   gradient?: {
+    enabled?: boolean;
     from: string;
     to: string;
     direction: string;

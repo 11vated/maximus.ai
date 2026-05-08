@@ -122,12 +122,12 @@ export function useAgentWebSocket() {
         break;
 
       case 'thinking':
-        updateActiveTab({ agentState: { state: 'thinking' as any, message: msg || 'Thinking...' } });
+        updateActiveTab({ agentState: { state: 'thinking' as any, currentTool: null, progress: 0, message: msg || 'Thinking...' } });
         break;
 
       case 'acting':
         updateActiveTab({
-          agentState: { state: 'acting' as any, currentTool: data?.tool, message: msg || 'Executing...' }
+          agentState: { state: 'acting' as any, currentTool: data?.tool || null, progress: 50, message: msg || 'Executing...' }
         });
         if (data?.tool) {
           addLine({
@@ -141,15 +141,15 @@ export function useAgentWebSocket() {
         break;
 
       case 'observing':
-        updateActiveTab({ agentState: { state: 'observing' as any, message: 'Processing result...' } });
+        updateActiveTab({ agentState: { state: 'observing' as any, currentTool: null, progress: 75, message: 'Processing result...' } });
         break;
 
       case 'reflecting':
-        updateActiveTab({ agentState: { state: 'reflecting' as any, message: 'Reflecting...' } });
+        updateActiveTab({ agentState: { state: 'reflecting' as any, currentTool: null, progress: 85, message: 'Reflecting...' } });
         break;
 
       case 'done':
-        updateActiveTab({ agentState: { state: 'idle' as any, message: 'Task completed' } });
+        updateActiveTab({ agentState: { state: 'idle' as any, currentTool: null, progress: 100, message: 'Task completed' } });
         addLine({
           id: Date.now().toString(),
           type: 'system',
@@ -159,7 +159,7 @@ export function useAgentWebSocket() {
         break;
 
       case 'error':
-        updateActiveTab({ agentState: { state: 'error' as any, message: msg || 'An error occurred' } });
+        updateActiveTab({ agentState: { state: 'error' as any, currentTool: null, progress: 0, message: msg || 'An error occurred' } });
         addLine({
           id: Date.now().toString(),
           type: 'error',

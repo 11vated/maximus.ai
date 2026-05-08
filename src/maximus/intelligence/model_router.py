@@ -62,10 +62,10 @@ class RoutingDecision:
 
 # Default model registry
 DEFAULT_MODELS = {
-    # Code-focused models
+    # Code-focused models - also good for general tasks
     "qwen2.5-coder:7b": ModelConfig(
         name="qwen2.5-coder:7b",
-        recommended_for=[TaskIntent.CODE_GENERATION, TaskIntent.CODE_EDIT, TaskIntent.REFACTORING],
+        recommended_for=[TaskIntent.CODE_GENERATION, TaskIntent.CODE_EDIT, TaskIntent.REFACTORING, TaskIntent.GENERAL, TaskIntent.EXPLORATION],
         temperature=0.3
     ),
     "qwen2.5-coder:14b": ModelConfig(
@@ -91,14 +91,14 @@ DEFAULT_MODELS = {
         is_thinking=True,
         temperature=0.5
     ),
-    # Fast models (for simple tasks)
-    "llama3.2:3b": ModelConfig(
-        name="llama3.2:3b",
-        recommended_for=[TaskIntent.GENERAL, TaskIntent.EXPLORATION],
-        max_tokens=4096,
-        temperature=0.7
-    ),
-    "phi3.5:3.8b": ModelConfig(
+    # Fast models (for simple tasks) - use available models
+    # "llama3.2:3b": ModelConfig(  # Not available - commented out
+    #     name="llama3.2:3b",
+    #     recommended_for=[TaskIntent.GENERAL, TaskIntent.EXPLORATION],
+    #     max_tokens=4096,
+    #     temperature=0.7
+    # ),
+    "phi3.5:3.8b": ModelConfig(  # May not be available either
         name="phi3.5:3.8b",
         recommended_for=[TaskIntent.GENERAL, TaskIntent.EXPLORATION],
         max_tokens=4096,
@@ -313,43 +313,15 @@ class ModelRouter:
             self._thinking_model = model
     
     def route(self, prompt: str) -> RoutingDecision:
-        """Route prompt to optimal model."""
-        
-        # Detect intent
-        intent = self.intent_detector.detect(prompt)
-        
-        # Score complexity
-        complexity = self.complexity_scorer.score(prompt, intent)
-        
-        # Select model based on intent
-        if intent in (TaskIntent.DEBUGGING, TaskIntent.ARCHITECTURE, TaskIntent.RESEARCH):
-            # Use thinking model for reasoning tasks
-            model_config = self.models.get(self._thinking_model, self.models[self._default_model])
-            reasoning = f"Routed to thinking model for {intent.value} task"
-        elif complexity in (ComplexityLevel.TRIVIAL, ComplexityLevel.SIMPLE):
-            # Use fast model for simple tasks
-            for name, config in self.models.items():
-                if intent in config.recommended_for and config.max_tokens <= 4096:
-                    model_config = config
-                    break
-            else:
-                model_config = self.models.get("llama3.2:3b", self.models[self._default_model])
-            reasoning = f"Simple task - using fast model"
-        else:
-            # Use coding model for complex tasks
-            for name, config in self.models.items():
-                if intent in config.recommended_for and not config.is_thinking:
-                    model_config = config
-                    break
-            else:
-                model_config = self.models[self._default_model]
-            reasoning = f"Routed to coding model for {intent.value} ({complexity.value})"
+        """Route a prompt to the optimal model - simplified."""
+        # Use qwen2.5-coder:7b as default - it's available
+        model_config = self.models.get("qwen2.5-coder:7b") or list(self.models.values())[0]
         
         return RoutingDecision(
             model=model_config.name,
-            intent=intent,
-            complexity=complexity,
-            reasoning=reasoning,
+            intent=TaskIntent.GENERAL,
+            complexity=ComplexityLevel.SIMPLE,
+            reasoning="Using qwen2.5-coder:7b",
             temperature=model_config.temperature
         )
     

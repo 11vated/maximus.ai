@@ -1,11 +1,14 @@
 import React, { useEffect, useRef } from 'react';
 import { useTerminalStore } from '../store/useTerminalStore';
+import { useBuddyStore } from '../store/useBuddyStore';
 import CommandLine from './CommandLine';
 import OutputDisplay from './OutputDisplay';
 import ThemeSwitcher from './ThemeSwitcher';
 import { AgentVisualizer } from './AgentVisualizer';
 import { TabBar } from './TabBar';
 import { ParticleBackground } from './ParticleBackground';
+import { BuddyAvatar } from './BuddySystem/BuddyAvatar';
+import { BuddyStatsPanel } from './BuddySystem/BuddyStats';
 import { cyberpunkTheme, retroCRTTheme, minimalistTheme, dataDrivenTheme } from '../types/theme';
 
 interface TerminalContainerProps {
@@ -27,6 +30,8 @@ const TerminalContainer: React.FC<TerminalContainerProps> = ({ className = '' })
     toggleSettings,
     clearTerminal,
   } = useTerminalStore();
+
+  const { buddy, interact } = useBuddyStore();
 
   const terminalRef = useRef<HTMLDivElement>(null);
 
@@ -83,11 +88,30 @@ const TerminalContainer: React.FC<TerminalContainerProps> = ({ className = '' })
           className="flex items-center justify-between border-b px-4 py-2"
           style={{ borderColor: activeTheme.primary + '40' }}
         >
-          <div className="flex items-center gap-2">
-            <div className="h-3 w-3 rounded-full bg-red-500" />
-            <div className="h-3 w-3 rounded-full bg-yellow-500" />
-            <div className="h-3 w-3 rounded-full bg-green-500" />
-            <span className="ml-4 text-sm opacity-70">Maximus.ai Terminal</span>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <div className="h-3 w-3 rounded-full bg-red-500" />
+              <div className="h-3 w-3 rounded-full bg-yellow-500" />
+              <div className="h-3 w-3 rounded-full bg-green-500" />
+              <span className="ml-2 text-sm opacity-70">Maximus.ai Terminal</span>
+            </div>
+            
+            {/* Buddy System */}
+            <div className="flex items-center gap-2 ml-4">
+              <BuddyAvatar 
+                buddy={buddy} 
+                theme={activeTheme} 
+                onInteraction={(type) => interact(type as any)}
+                size="small"
+              />
+              <div className="hidden md:block">
+                <BuddyStatsPanel 
+                  stats={buddy.stats} 
+                  theme={activeTheme} 
+                  compact 
+                />
+              </div>
+            </div>
           </div>
 
           <div className="flex items-center gap-2">

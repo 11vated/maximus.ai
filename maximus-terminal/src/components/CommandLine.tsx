@@ -1,18 +1,29 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { type ThemeConfig } from '../types/theme';
+import { useVimMode } from '../hooks/useVimMode';
 
 interface CommandLineProps {
   value: string;
   onChange: (value: string) => void;
   onExecute: (command: string) => void;
   theme: ThemeConfig;
+  vimEnabled?: boolean;
 }
 
-const CommandLine: React.FC<CommandLineProps> = ({ value, onChange, onExecute, theme }) => {
+const CommandLine: React.FC<CommandLineProps> = ({ value, onChange, onExecute, theme, vimEnabled = false }) => {
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const inputRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Vim mode
+  const { 
+    value: vimValue, 
+    displayMode, 
+    handleKeyDown: vimHandleKeyDown,
+    setValue: setVimValue,
+    mode: vimMode
+  } = useVimMode(value, onExecute);
 
   const commands = [
     'help', 'clear', 'run', 'chat', 'status', 'analyze',
@@ -55,8 +66,30 @@ const CommandLine: React.FC<CommandLineProps> = ({ value, onChange, onExecute, t
     }
   };
 
-  // Handle keydown
+  // Handle keydown - use vim handler when vim is enabled
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (vimEnabled) {
+      const result = vimHandleKeyDown(e);
+      if (result.value !== value) {
+        onChange(result.value);
+        if (inputRef.current) {
+          inputRef.current.textContent = result.value;
+        }
+      }
+      
+      // Execute on Enter in normal mode with content
+      if (e.key === 'Enter' && vimMode === 'normal' && vimValue.trim()) {
+        onExecute(vimValue);
+        if (inputRef.current) {
+          inputRef.current.textContent = '';
+        }
+        setVimValue('');
+        onChange('');
+      }
+      return;
+    }
+
+    // Original handler
     if (e.key === 'Enter') {
       e.preventDefault();
       if (value.trim()) {
@@ -117,6 +150,25 @@ const CommandLine: React.FC<CommandLineProps> = ({ value, onChange, onExecute, t
         <span style={{ color: theme.primary }} className="font-bold">
           ❯
         </span>
+        
+        {/* Vim Mode Indicator */}
+        {vimEnabled && (
+          <div className="flex items-center gap-1">
+            <span 
+              className="text-xs px-2 py-0.5 rounded font-mono"
+              style={{ 
+                backgroundColor: vimMode === 'insert' ? '#00b894' : 
+                                vimMode === 'visual' ? '#e17055' :
+                                vimMode === 'command' ? '#6c5ce7' :
+                                theme.primary + '40',
+                color: vimMode === 'insert' ? '#fff' : theme.foreground
+              }}
+            >
+              {displayMode}
+            </span>
+          </div>
+        )}
+        
         <div
           ref={inputRef}
           contentEditable

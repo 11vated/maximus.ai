@@ -35,8 +35,8 @@ export type CognitiveState = 'init' | 'thinking' | 'acting' | 'observing' | 'ref
 
 export interface AgentState {
   state: CognitiveState;
-  currentTool?: string | null;
-  progress?: number;
+  currentTool: string | null;
+  progress: number;
   message: string;
   sessionId?: string;
 }

@@ -105,13 +105,15 @@ class LLMClient:
 
     async def chat(self, messages: List[Dict], tools: Optional[List] = None, **kwargs):
         """Route to appropriate backend."""
-        model = kwargs.get("model", self.config.model)
+        # Extract model from kwargs to avoid passing it twice
+        model = kwargs.pop("model", self.config.model)
+        temperature = kwargs.pop("temperature", 0.7)
 
         if model.startswith("gpt-") and self.openai_client:
-            async for chunk in self._openai_chat(messages, tools, **kwargs):
+            async for chunk in self._openai_chat(messages, tools, model=model, temperature=temperature):
                 yield chunk
         else:
-            async for chunk in self.ollama.chat(model, messages, tools, **kwargs):
+            async for chunk in self.ollama.chat(model, messages, tools, temperature=temperature):
                 yield chunk
 
     async def generate(self, prompt: str, system: Optional[str] = None, **kwargs) -> str:
