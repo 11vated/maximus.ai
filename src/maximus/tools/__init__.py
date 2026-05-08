@@ -5,5 +5,8 @@ from maximus.tools.base import BaseTool, ToolMetadata
 
 # Register builtin tools on import
 from maximus.tools.builtin import register_builtin_tools
-
 register_builtin_tools()
+
+# Register safety tools
+from maximus.tools.preview import PreviewWriteTool
+register_tool(PreviewWriteTool())

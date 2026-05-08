@@ -1,241 +1,362 @@
-# Maximus.ai Architecture
+# Maximus.ai Architecture Design
+**Phase 2 Deliverable**
 
-## Overview
-Maximus.ai is a 100% free, unlimited, and capable coding agent built by merging patterns from:
-- **open-swe** (LangChain) - Middleware stack, cloud sandbox patterns
-- **collection-claude-code-source-code** (ClawSpring) - Event streaming, tool registry, memory layers
-- **Nexus** - 8-state cognitive loop, stance system, local-first architecture
+---
 
-## Core Architecture
+## 1. Architecture Overview
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    Maximus.ai Agent                        │
-├─────────────────────────────────────────────────────────────┤
-│  Triggers: CLI / Local File / Git Hooks (no cloud)         │
-│                                                             │
-│  ┌─────────────┐    ┌──────────────┐    ┌──────────────┐  │
-│  │ Middleware   │───▶│ Cognitive    │───▶│ Planner      │  │
-│  │ (6-layer)  │    │ Loop (8-state│    │ (Ollama LLM) │  │
-│  └─────────────┘    └──────────────┘    └──────────────┘  │
-│                           │                     │             │
-│                           ▼                     ▼             │
-│                    ┌──────────────┐   ┌──────────────┐     │
-│                    │ Memory       │   │ Executor      │     │
-│                    │ (Dual-scope) │   │ (Tool        │     │
-│                    └──────────────┘   │  Dispatch)   │     │
-│                           │           └──────────────┘     │
-│                           ▼                     ▼             │
-│                    ┌──────────────┐   ┌──────────────┐     │
-│                    │ Tools        │◀──│ Reflector     │     │
-│                    │ (26+ local)  │   │ (Quality      │     │
-│                    └──────────────┘   │  Assessment)  │     │
-│                                        └──────────────┘     │
-└─────────────────────────────────────────────────────────────┘
+│                     USER INPUT                              │
+│                  "maximus" or "maximus --model 14b"          │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    ENTRY POINT                               │
+│              bin/maximus (shell wrapper)                     │
+│  - Parses arguments                                          │
+│  - Starts Ollama if needed                                    │
+│  - Launches terminal UI                                       │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│                 TERMINAL UI (Frontend)                      │
+│              maximus/ui/terminal.py                          │
+│  - Chat interface (prompt_toolkit/textual)                   │
+│  - User input → Backend API                                   │
+│  - Response streaming → User                                  │
+│  - Session persistence                                        │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│                   BACKEND API                                │
+│              maximus/core/api.py                            │
+│  - process_message(user_input, session_id)                  │
+│  - run_tool(tool_name, params)                               │
+│  - Manages session state                                      │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+          ┌───────────────┼───────────────┐
+          ▼               ▼               ▼
+┌─────────────────┐ ┌─────────────┐ ┌─────────────────────┐
+│   TOOL         │ │   LLM       │ │   SAFETY            │
+│   REGISTRY     │ │   CLIENT    │ │   CONTROLLER        │
+│                │ │             │ │                     │
+│ - read_file    │ │ - Ollama    │ │ - Prompt injection  │
+│ - write_file   │ │ - Model     │ │ - Tool wrapper      │
+│ - execute_shell│ │   selection │ │ - User confirmation  │
+│ - grep         │ │ - Streaming │ │                     │
+│ - preview_write│ │             │ │                     │
+└─────────────────┘ └─────────────┘ └─────────────────────┘
 ```
 
-## Key Components
+---
 
-### 1. Cognitive Loop (`core/loop.py`)
-- **8 States**: INIT → PLAN → ACT → OBSERVE → REFLECT → ADAPT → COMMIT → PAUSE
-- **Event Streaming**: TextChunk, ThinkingChunk, ToolStart, ToolEnd, TurnDone, StateChange
-- **Hybrid Design**: Nexus state machine + ClawSpring event streaming
+## 2. Module Boundaries
 
-### 2. Tool System (`tools/`)
-- **Base**: `BaseTool` ABC with metadata (name, permission_level, local_only)
-- **Registry**: Global `ToolRegistry` with register/dispatch/schema generation
-- **29 Builtin Tools**:
-  - File: `read_file`, `write_file`, `edit_file`, `move_file`, `copy_file`, `delete_file`, `create_dir`
-  - Search: `grep`, `glob`, `web_search`, `browse_url`
-  - Execution: `execute_shell`, `run_python`, `run_node`, `run_tests`
-  - Git: `git_status`, `git_diff`, `git_add`, `git_commit`, `git_push`
-  - System: `ls`, `sleep`, `datetime`, `env_info`, `system_info`, `list_processes`
-  - Repo Analysis: `analyze_open_swe`, `analyze_clawspring`, `analyze_nexus`
-- **Permission Levels**: `safe` (auto-approve), `write` (confirm), `dangerous` (strict check)
-- **Safety**: `execute_shell` checks against SAFE_COMMANDS whitelist
-
-### 3. Memory Systems (`memory/`)
-- **ShortTermMemory**: Rolling window (last 50 messages) via `deque`
-- **LongTermMemory**: Persistent store at `~/.maximus/memory/`
-  - File-based: `MEMORY.md` injection into prompts (ClawSpring pattern)
-  - Optional: ChromaDB vector store for semantic search
-
-### 4. Intelligence Layer (`intelligence/`)
-- **Planner**: LLM-based task decomposition (Nexus pattern)
-  - Converts goals into ordered `Step` objects with dependencies
-  - Outputs JSON with steps, success_criteria, risk_flags
-- **Reflector**: Quality assessment (Nexus pattern)
-  - Evaluates plan execution against success criteria
-  - Provides confidence scores and revision suggestions
-
-### 5. LLM Client (`utils/llm.py`)
-- **OllamaClient**: 100% free local inference via Ollama API
-  - Models: `qwen2.5-coder:7b`, `deepseek-coder-v2:16b`, etc.
-  - Endpoints: `/api/chat` (streaming), `/api/generate` (non-streaming)
-- **LLMClient**: Unified client supporting Ollama (default) + OpenAI (optional)
-  - Routes to appropriate backend based on model name
-
-### 6. Middleware Stack (`middleware/`)
-- **SanitizeInputsMiddleware**: Prevent injection in tool inputs
-- **RateLimitMiddleware**: Enforce `max_model_calls` limit
-- **AuditLogMiddleware**: Log all actions for audit trail
-- **Pluggable**: Additional middleware can be added to the 6-layer stack
-
-### 7. CLI (`cli.py`)
-- **Commands**:
-  - `maximus run "prompt"`: Execute a single prompt
-  - `maximus chat`: Interactive chat session
-  - `maximus status`: Check Ollama, Python, directories
-- **Rich Output**: Formatted panels, colored text, progress indicators
-
-### 8. Stance System (`intelligence/stance.py`) - NEW
-- **7 Behavior Modes**: exploratory, methodical, creative, surgical, architectural, debugging, learning
-- **Adaptive**: Auto-suggests stance based on goal keywords
-- **Planning Context**: Modifies temperature, iteration count, reflection depth
-- **StanceManager**: Switch stances dynamically during execution
-
-### 9. Conversation Branching (`memory/branching.py`) - NEW
-- **Git-like Branches**: Create, switch, merge, delete branches
-- **Commit History**: Track state, goals, plans, results per commit
-- **BranchManager**: Persistent storage at `.maximus/branches.json`
-- **State Reconstruction**: Replay agent state at any commit
-
-### 10. MCP Integration (`mcp/manager.py`) - NEW
-- **Model Context Protocol**: Connect to MCP-compatible servers
-- **Tool Discovery**: List tools from MCP servers dynamically
-- **MCPManager**: Manage multiple MCP server connections
-- **Async Support**: Full async/await support for tool execution
-
-### 11. Context Compaction (`memory/compaction.py`) - NEW
-- **2-Layer Pipeline**: Rule-based (Layer 1) + AI Summary (Layer 2)
-- **Rule-Based**: Pattern matching, max items, priority system
-- **AI Summarization**: Compress old messages while preserving recent context
-- **CompactionManager**: Configurable token limits and preservation rules
-
-## Data Flow
-
-### Planning Phase
-```
-User Prompt → Orchestrator → Middleware → Planner (LLM) → Plan (steps + criteria)
+### 2.1 Entry Point (`bin/maximus`)
+```python
+#!/bin/bash
+# Simple wrapper that:
+# 1. Checks --model flag
+# 2. Ensures Ollama running (start if not)
+# 3. Launches: python -m maximus.ui.terminal
 ```
 
-### Execution Phase
-```
-Plan → AgentLoop (state=ACT) → Executor → ToolRegistry → Tool.execute() → Result
-```
+### 2.2 Terminal UI (`src/maximus/ui/`)
+| File | Responsibility |
+|------|----------------|
+| `terminal.py` | Main UI loop, input/output |
+| `session.py` | Session state, history |
+| `render.py` | Response formatting |
 
-### Reflection Phase
-```
-Results → Reflector (LLM) → QualityReport (confidence, needs_revision) → Decision
-```
+### 2.3 Backend Core (`src/maximus/core/`)
+| File | Responsibility |
+|------|----------------|
+| `api.py` | Unified API - single entry point for UI |
+| `agent.py` | Tool-calling LLM orchestration |
+| `safety.py` | Three-layer safety controller |
 
-## Design Principles
+### 2.4 Tool Registry (`src/maximus/tools/`)
+| File | Responsibility |
+|------|----------------|
+| `registry.py` | Tool registration, dispatch |
+| `builtin/*.py` | Individual tool implementations |
+| `preview.py` | preview_write tool for safety |
 
-1. **100% Free**: No paid APIs, all local (Ollama)
-2. **100% Unlimited**: No rate limits, no usage caps
-3. **100% Capable**: Full agent loop, planning, reflection, memory
-4. **Local-First**: All processing on-device, no cloud dependencies
-5. **Safety-First**: Permission levels, dangerous command blocking, audit logs
-6. **Extensible**: Plugin architecture for tools, middleware, adapters
+### 2.5 LLM Client (`src/maximus/utils/`)
+| File | Responsibility |
+|------|----------------|
+| `llm.py` | Ollama client, streaming |
+| `model_selector.py` | Hardware-based model selection |
 
-## Security Model
+---
 
-### Permission Levels
-- **safe**: Read-only operations, auto-approved (e.g., `read_file`, `grep`, `ls`)
-- **write**: Modifies files, requires confirmation in "auto" mode (e.g., `write_file`, `git_commit`)
-- **dangerous**: High-risk operations, strict checks (e.g., `execute_shell`, `delete_file`)
+## 3. Key API Definitions
 
-### Trust Levels (from Nexus)
-- **untrusted**: All actions require approval
-- **basic**: Safe operations auto-approved
-- **verified**: Write operations auto-approved
-- **privileged**: All actions auto-approved
-
-### Safety Mechanisms
-- `execute_shell` whitelist: Only safe commands (ls, git, python, etc.)
-- Middleware chain for cross-cutting concerns
-- Audit logging for all actions
-- Local-only enforcement (tools marked `local_only=True`)
-
-## Future Enhancements
-
-1. **SWE-bench Integration**: Benchmark agent performance
-2. **TUI Interface**: Textual-based terminal UI (from Nexus)
-3. **Hook System**: Event-driven extensions (from Nexus)
-4. **Multi-Agent Orchestration**: Parallel agent execution (from ClawSpring)
-5. **Docker Support**: Optional containerized deployment
-6. **Sub-Agent Spawning**: Specialized agent types (from ClawSpring)
-
-## File Structure
-```
-maximus.ai/
-├── src/maximus/
-│   ├── core/            # Agent loop, models
-│   │   ├── __init__.py
-│   │   └── loop.py      # 8-state cognitive loop
-│   ├── tools/           # Tool system
-│   │   ├── base.py      # BaseTool ABC
-│   │   ├── registry.py  # ToolRegistry
-│   │   ├── builtin/     # 29 builtin tools
-│   │   └── __init__.py
-│   ├── memory/          # Memory systems
-│   │   ├── short_term.py
-│   │   ├── long_term.py
-│   │   ├── branching.py # Conversation branching (NEW)
-│   │   ├── compaction.py # Context compaction (NEW)
-│   │   └── __init__.py
-│   ├── intelligence/    # Planner, Reflector
-│   │   ├── planner.py
-│   │   ├── reflector.py
-│   │   ├── stance.py    # Stance system (NEW)
-│   │   └── __init__.py
-│   ├── adapters/        # Repo-specific adapters
-│   │   ├── open_swe_adapter.py
-│   │   ├── clawspring_adapter.py
-│   │   ├── nexus_adapter.py
-│   │   └── __init__.py
-│   ├── mcp/            # MCP integration (NEW)
-│   │   ├── manager.py
-│   │   └── __init__.py
-│   ├── middleware/      # Middleware stack
-│   │   ├── base.py
-│   │   └── __init__.py
-│   ├── utils/           # LLM client, config
-│   │   ├── llm.py
-│   │   └── __init__.py
-│   ├── cli.py           # CLI entry point
-│   ├── __init__.py
-│   └── __main__.py     # python -m maximus support (NEW)
-├── tests/
-│   ├── unit/           # 16+ unit tests
-│   ├── test_repo_adapters.py  # 10 adapter tests (NEW)
-│   ├── test_integration.py    # 8 integration tests (NEW)
-│   └── conftest.py
-├── docs/                # Documentation
-├── scripts/             # Install, verify scripts
-├── pyproject.toml      # Package config
-├── README.md           # User documentation
-├── ARCHITECTURE.md     # This file
-├── AGENTS.md           # AI agent guide
-└── .env.example        # Configuration template
+### 3.1 Backend API (`maximus/core/api.py`)
+```python
+class MaximusBackend:
+    """Single unified API - the only interface the UI knows about."""
+    
+    def __init__(self, model: str = None):
+        # Initialize with auto-model selection if not specified
+    
+    def process_message(self, user_input: str, session_id: str = None) -> str:
+        """
+        Main entry point - takes user message, returns agent response.
+        Handles: LLM call, tool execution, safety checks, response streaming.
+        """
+        pass
+    
+    def run_tool(self, tool_name: str, params: dict) -> dict:
+        """
+        Execute a tool (internal use).
+        Returns: {"success": bool, "result": any, "error": str}
+        """
+        pass
+    
+    def get_session(self, session_id: str) -> Session:
+        """Retrieve or create session."""
+        pass
+    
+    def shutdown(self):
+        """Clean shutdown."""
+        pass
 ```
 
-## Quick Start
+### 3.2 Tool Registry (`maximus/tools/registry.py`)
+```python
+class ToolRegistry:
+    """Registry - the ONLY way tools are accessed."""
+    
+    def register(self, tool: BaseTool):
+        """Register a tool."""
+        pass
+    
+    def execute(self, name: str, params: dict, context: dict) -> dict:
+        """Execute tool with safety wrapper."""
+        pass
+    
+    def list_tools(self) -> List[str]:
+        """List available tool names."""
+        pass
+    
+    def get_schema(self, name: str) -> dict:
+        """Get tool schema for LLM."""
+        pass
+```
 
+### 3.3 Safety Controller (`maximus/core/safety.py`)
+```python
+class SafetyController:
+    """Three-layer safety system."""
+    
+    def layer1_prompt_injection(self, prompt: str) -> str:
+        """Add safety rules to system prompt."""
+        pass
+    
+    def layer2_tool_wrapper(self, tool_name: str, params: dict) -> bool:
+        """
+        Check if tool call is allowed.
+        Returns True if allowed, raises SafetyError if blocked.
+        """
+        pass
+    
+    def layer3_user_confirmation(self, action: str) -> bool:
+        """
+        Ask user for confirmation on destructive actions.
+        Returns True if confirmed.
+        """
+        pass
+```
+
+---
+
+## 4. Auto-Config Logic
+
+### 4.1 Hardware Detection (`maximus/utils/hardware.py`)
+```python
+def detect_hardware() -> dict:
+    """
+    Returns:
+    {
+        "ram_gb": int,
+        "vram_gb": int,
+        "has_gpu": bool,
+        "is_apple_silicon": bool,
+        "os": "linux" | "darwin" | "windows"
+    }
+    """
+    pass
+
+def select_default_model(hardware: dict) -> str:
+    """
+    Model selection based on hardware:
+    - < 6GB VRAM: qwen2.5-coder:7b
+    - 6-8GB VRAM: qwen2.5-coder:14b  
+    - > 8GB VRAM: qwen2.5-coder:14b
+    - Apple Silicon: qwen2.5-coder:7b
+    - No GPU: codellama:7b
+    """
+    pass
+```
+
+### 4.2 Ollama Management
+```python
+def ensure_ollama_running() -> bool:
+    """
+    1. Check if Ollama responding on localhost:11434
+    2. If not, try to start: subprocess.Popen(["ollama", "serve"])
+    3. Wait for up to 10 seconds for startup
+    4. Return True if running
+    """
+    pass
+```
+
+---
+
+## 5. Session Persistence
+
+### 5.1 Session Storage
+- Location: `~/.local/share/maximus/sessions/`
+- Format: JSON files named `{session_id}.json`
+- Contents: messages history, selected model, metadata
+
+### 5.2 Session Schema
+```json
+{
+    "session_id": "uuid",
+    "created_at": "ISO timestamp",
+    "model": "qwen2.5-coder:7b",
+    "messages": [
+        {"role": "user", "content": "..."},
+        {"role": "assistant", "content": "..."}
+    ],
+    "last_activity": "ISO timestamp"
+}
+```
+
+---
+
+## 6. Safety Implementation Details
+
+### Layer 1: Prompt Injection
+```python
+SYSTEM_PROMPT = """You are Maximus, a helpful coding assistant.
+
+CRITICAL RULES:
+- Before writing to ANY file, call preview_write with the exact content
+- Wait for user confirmation BEFORE making any changes
+- Only execute commands you understand
+
+When user asks to write/edit files:
+1. Call preview_write with exact content
+2. Explain what will happen
+3. Wait for their confirmation
+"""
+```
+
+### Layer 2: Tool Wrapper
+```python
+async def execute_with_safety(tool_name, params, context):
+    # Check if this is a write operation
+    if tool_name in ["write_file", "edit_file", "delete_file"]:
+        # Require preview_write was called in same turn
+        if not context.get("preview_called"):
+            raise SafetyError(
+                "preview_write must be called before " + tool_name
+            )
+    
+    # Execute tool
+    return await tool_registry.execute(tool_name, params)
+```
+
+### Layer 3: User Confirmation
+```python
+def confirm_destructive(action: str) -> bool:
+    """Show [y/N] prompt for destructive actions."""
+    response = input(f"⚠️  {action}? [y/N] ")
+    return response.lower().startswith('y')
+```
+
+---
+
+## 7. Unified Entry Point Implementation
+
+### 7.1 The `maximus` command
 ```bash
-# Install Ollama
-ollama serve  # Start Ollama server
-ollama pull qwen2.5-coder:7b  # Pull model
+#!/bin/bash
+# bin/maximus
 
-# Install Maximus.ai
-cd C:\Users\11vat\Desktop\agent007\maximus.ai
-pip install -e .
+# Parse --model flag
+MODEL_FLAG=""
+if [[ "$1" == "--model" || "$1" == "-m" ]]; then
+    MODEL_FLAG="--model $2"
+    shift 2
+fi
 
-# Run
-maximus run "List all Python files"
-maximus chat  # Interactive mode
-maximus status  # Check system
+# Ensure Ollama running
+python -c "from maximus.utils.ollama import ensure_ollama_running; ensure_ollama_running()"
+
+# Launch terminal UI
+python -m maximus.ui.terminal $MODEL_FLAG
 ```
 
-## License
-MIT
+---
+
+## 8. File Structure After Refactoring
+
+```
+maximus/
+├── bin/
+│   └── maximus                    # Entry point script
+├── src/maximus/
+│   ├── __main__.py               # python -m maximus entry
+│   ├── cli.py                    # DEPRECATED (keep for backward compat)
+│   ├── core/
+│   │   ├── api.py                # NEW: Unified API
+│   │   ├── agent.py               # NEW: Agent orchestration
+│   │   ├── safety.py             # NEW: Safety controller
+│   │   └── loop.py               # Keep: Agent loop (refactored)
+│   ├── tools/
+│   │   ├── registry.py           # Keep: Tool registry
+│   │   ├── preview.py             # NEW: preview_write tool
+│   │   └── builtin/              # Keep: Existing tools
+│   ├── ui/
+│   │   ├── terminal.py           # NEW: Terminal UI
+│   │   ├── session.py            # NEW: Session management
+│   │   └── render.py             # NEW: Response rendering
+│   └── utils/
+│       ├── llm.py                # Keep: LLM client
+│       ├── ollama.py             # NEW: Ollama management
+│       └── hardware.py           # NEW: Hardware detection
+├── config/
+│   └── default.yaml              # Default config template
+└── tests/
+    ├── test_api.py               # NEW: API tests
+    ├── test_safety.py            # NEW: Safety layer tests
+    └── test_hardware.py          # NEW: Model selection tests
+```
+
+---
+
+## 9. Migration Path
+
+| Old Component | New Component | Action |
+|---------------|---------------|--------|
+| `maximus run` | `maximus` | Redirect |
+| `maximus chat` | `maximus` | Redirect |
+| `maximus models` | Internal only | Remove from help |
+| `maximus config` | `~/.config/maximus/` | Move to file |
+| `maximus discover` | Internal tool | Remove from CLI |
+| `maximus status` | `maximus doctor` | Keep as hidden |
+
+---
+
+**END OF ARCHITECTURE DESIGN**
+
+Ready for Phase 3: Implementation
