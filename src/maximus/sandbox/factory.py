@@ -8,6 +8,12 @@ Implements Open-SWE pattern:
 - DaytonaSandbox - managed dev environments
 """
 
+try:
+    import modal
+    MODAL_AVAILABLE = True
+except ImportError:
+    MODAL_AVAILABLE = False
+
 import asyncio
 import logging
 import uuid

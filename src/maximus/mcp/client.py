@@ -55,18 +55,26 @@ class MCPClient:
         # github:///owner/repo?ref=main
         # npm:///package-name
         # file:///path/to/server.py
-        
+
         parts = url.split("://", 1)
         if len(parts) != 2:
             raise ValueError(f"Invalid MCP URL: {url}")
-        
+
         scheme = parts[0]
-        path = parts[1]
-        
+        path = parts[1].lstrip("/")  # Strip leading slashes
+
+        # Separate query params if present
+        ref = None
+        if "?" in path:
+            path, query = path.split("?", 1)
+            for param in query.split("&"):
+                if param.startswith("ref="):
+                    ref = param[4:]
+
         return {
             "scheme": scheme,
             "path": path,
-            "ref": None,
+            "ref": ref,
         }
 
     async def _list_tools(self, server_name: str) -> List[Dict[str, Any]]:

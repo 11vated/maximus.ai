@@ -28,6 +28,7 @@ from maximus.core.api import MaximusBackend
 from maximus.core.session_manager import SessionManager
 from maximus.mcp.connector import add_server, list_available_servers, auto_discover_servers
 from maximus.discovery.connector import discover_packages, get_package_details, format_package_info
+from maximus.sandbox.factory import get_sandbox, MODAL_AVAILABLE
 
 # Terminal constants
 MAX_OUTPUT_LINES = 500  # Virtual scroll buffer size
@@ -337,7 +338,49 @@ class TerminalUI:
                 
         except Exception as e:
             self.stream_output(f"Error: {e}\n", file=sys.stderr)
-    
+
+    async def handle_sandbox_command(self, command: str):
+        """Handle sandbox commands like 'sandbox run <code>'."""
+        parts = command.split(maxsplit=1)
+        if not parts or not parts[0]:
+            self.stream_output("Usage: sandbox run <code> | sandbox list\n", file=sys.stderr)
+            self.stream_output("Commands: run <code>, list\n", file=sys.stderr)
+            return
+
+        cmd = parts[0].lower()
+        args = parts[1] if len(parts) > 1 else ""
+
+        if cmd == "run":
+            if not args:
+                self.stream_output("Usage: sandbox run <code>\n", file=sys.stderr)
+                return
+            self.stream_output("Executing in sandbox...\n", file=sys.stderr)
+            result = self.safe_execute(
+                lambda: asyncio.run(self._execute_sandbox(args))
+            )
+            if result:
+                self.stream_output(f"Result: {result}\n")
+
+        elif cmd == "list":
+            self.stream_output("Available sandbox backends:\n", file=sys.stderr)
+            self.stream_output("  - local: Direct execution\n", file=sys.stderr)
+            self.stream_output("  - docker: Containerized execution\n", file=sys.stderr)
+            self.stream_output("  - modal: Serverless execution (requires modal package)\n", file=sys.stderr)
+        else:
+            self.stream_output(f"Unknown sandbox command: {cmd}\n", file=sys.stderr)
+
+    async def _execute_sandbox(self, code: str) -> Optional[str]:
+        """Execute code in a sandbox environment."""
+        try:
+            sandbox = get_sandbox()
+            result = await sandbox.execute(code)
+            if result.get("success"):
+                return result.get("stdout", "Success (no output)")
+            else:
+                return f"Error: {result.get('stderr', 'Unknown error')}"
+        except Exception as e:
+            return f"Sandbox error: {e}"
+
     async def run(self):
         """Main chat loop with error handling."""
         self.init_backend()
@@ -415,9 +458,9 @@ class TerminalUI:
                     await self.handle_discover_command(user_input.strip()[9:])
                     continue
 
-                # Discovery commands
-                if user_input.strip().startswith('discover '):
-                    await self.handle_discover_command(user_input.strip()[9:])
+                # Sandbox commands
+                if user_input.strip().startswith('sandbox '):
+                    await self.handle_sandbox_command(user_input.strip()[8:])
                     continue
 
                 if self.backend:
@@ -505,6 +548,7 @@ Usage:
     maximus --model <name>     Use specific model
     maximus --verbose          Show debug information
     maximus doctor             Run diagnostics
+    maximus --version          Show version number
 
 Options:
     -m, --model <name>        Specify model (7b, 14b, fast, smart, think)
@@ -512,7 +556,19 @@ Options:
     --new                      Force new session (skip menu)
     -v, --verbose             Enable debug output
     -h, --help                Show this help
-    --version                 Show version number
+
+In-Session Commands:
+    /help                     Show available commands
+    /sessions                 List all sessions
+    /new                      Start a new session
+    /resume <id>              Resume a specific session
+    /delete <id>              Delete a session
+    /clear                    Clear conversation history
+    mcp add <url>             Add an MCP server
+    mcp list                  List available MCP servers
+    mcp discover              Auto-discover MCP servers
+    discover <query>          Search for packages
+    sandbox run <code>        Execute code in sandbox
 
 Examples:
     maximus                   Start with session menu
@@ -550,6 +606,19 @@ def run_diagnostics():
         print(f"Config: {config_path}")
     else:
         print("Config: Not configured (will use defaults)")
+
+    # Check sandbox
+    print("\nSandbox Backends:")
+    try:
+        import docker
+        print("  ✓ Docker available")
+    except ImportError:
+        print("  - Docker not available (pip install docker)")
+
+    if MODAL_AVAILABLE:
+        print("  ✓ Modal available")
+    else:
+        print("  - Modal not available (pip install modal)")
     
     # Check sessions
     sessions_dir = os.path.expanduser("~/.local/maximus/sessions")
