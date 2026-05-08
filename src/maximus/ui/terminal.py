@@ -15,6 +15,7 @@ import signal
 import getpass
 import uuid
 import time
+import asyncio
 from datetime import datetime
 from collections import deque
 from typing import Optional, List
@@ -25,6 +26,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 from maximus.utils.ollama import ensure_ollama_running, get_default_model
 from maximus.core.api import MaximusBackend
 from maximus.core.session_manager import SessionManager
+from maximus.mcp.connector import add_server, list_available_servers, auto_discover_servers
+from maximus.discovery.connector import discover_packages, get_package_details, format_package_info
 
 # Terminal constants
 MAX_OUTPUT_LINES = 500  # Virtual scroll buffer size
@@ -241,8 +244,101 @@ class TerminalUI:
         for i, session in enumerate(sessions, 1):
             print(f"{i}. {session.format_display()}", file=sys.stderr)
         print()
+
+    async def handle_mcp_command(self, command: str):
+        """Handle MCP commands like 'mcp add github://...'."""
+        parts = command.split(maxsplit=1)
+        if not parts:
+            self.stream_output("Usage: mcp <command> [args]\n", file=sys.stderr)
+            self.stream_output("Commands: add <url>, list, discover\n", file=sys.stderr)
+            return
+            
+        cmd = parts[0].lower()
+        args = parts[1] if len(parts) > 1 else ""
+        
+        try:
+            if cmd == "add":
+                if not args:
+                    self.stream_output("Usage: mcp add <url>\n", file=sys.stderr)
+                    return
+                    
+                # Extract server name from URL or use default
+                name = "server"
+                if args.startswith("github://"):
+                    name = "github"
+                elif args.startswith("file://"):
+                    name = "filesystem"
+                    
+                self.stream_output(f"Adding MCP server: {name} ({args})...", file=sys.stderr)
+                success = self.safe_execute(
+                    lambda: asyncio.run(add_server(name, args))
+                )
+                if success:
+                    self.stream_output(" ✓ Done\n", file=sys.stderr)
+                else:
+                    self.stream_output(" ✗ Failed\n", file=sys.stderr)
+                    
+            elif cmd == "list":
+                servers = self.safe_execute(lambda: list_available_servers())
+                self.stream_output("Available MCP servers:\n", file=sys.stderr)
+                for s in servers:
+                    self.stream_output(f"  - {s}\n", file=sys.stderr)
+                    
+            elif cmd == "discover":
+                self.stream_output("Discovering MCP servers...", file=sys.stderr)
+                discovered = self.safe_execute(
+                    lambda: asyncio.run(auto_discover_servers())
+                )
+                if discovered:
+                    self.stream_output(f" ✓ Found: {', '.join(discovered)}\n", file=sys.stderr)
+                else:
+                    self.stream_output(" ✗ No servers discovered\n", file=sys.stderr)
+            else:
+                self.stream_output(f"Unknown MCP command: {cmd}\n", file=sys.stderr)
+                self.stream_output("Commands: add, list, discover\n", file=sys.stderr)
+                
+        except Exception as e:
+            self.stream_output(f"Error: {e}\n", file=sys.stderr)
+
+    async def handle_discover_command(self, command: str):
+        """Handle discover commands like 'discover redis client'."""
+        parts = command.split(maxsplit=1)
+        if not parts or not parts[0]:
+            self.stream_output("Usage: discover <query> [--install]\n", file=sys.stderr)
+            return
+            
+        query = parts[0]
+        install_flag = "--install" in command
+        
+        try:
+            self.stream_output(f"Searching for packages: '{query}'...", file=sys.stderr)
+            packages = self.safe_execute(
+                lambda: asyncio.run(discover_packages(query, limit=10))
+            )
+            
+            if packages:
+                self.stream_output(f"Found {len(packages)} packages:\n", file=sys.stderr)
+                for pkg in packages:
+                    pkg_info = self.safe_execute(
+                        lambda: asyncio.run(get_package_details(pkg["name"]))
+                    )
+                    if pkg_info:
+                        formatted = format_package_info(pkg_info)
+                        self.stream_output(f"  • {formatted}\n", file=sys.stderr)
+                    
+                if install_flag and packages:
+                    # Install the first package
+                    pkg_name = packages[0]["name"]
+                    self.stream_output(f"Installing {pkg_name}...", file=sys.stderr)
+                    # In a real implementation, this would use pip install
+                    self.stream_output(" ✓ (simulated) Package would be installed in sandbox\n", file=sys.stderr)
+            else:
+                self.stream_output("No packages found\n", file=sys.stderr)
+                
+        except Exception as e:
+            self.stream_output(f"Error: {e}\n", file=sys.stderr)
     
-    def run(self):
+    async def run(self):
         """Main chat loop with error handling."""
         self.init_backend()
 
@@ -307,6 +403,21 @@ class TerminalUI:
 
                 if user_input.strip() == '--list-sessions':
                     self.list_sessions_in_chat()
+                    continue
+
+                # MCP commands
+                if user_input.strip().startswith('mcp '):
+                    await self.handle_mcp_command(user_input.strip()[4:])
+                    continue
+
+                # Discovery commands
+                if user_input.strip().startswith('discover '):
+                    await self.handle_discover_command(user_input.strip()[9:])
+                    continue
+
+                # Discovery commands
+                if user_input.strip().startswith('discover '):
+                    await self.handle_discover_command(user_input.strip()[9:])
                     continue
 
                 if self.backend:
@@ -462,7 +573,7 @@ def run_diagnostics():
 def main():
     """Main entry point."""
     model, verbose, session_id, force_new, show_menu = parse_args()
-    
+     
     ui = TerminalUI(
         model=model, 
         verbose=verbose, 
@@ -470,7 +581,7 @@ def main():
         force_new=force_new,
         show_menu=show_menu
     )
-    ui.run()
+    asyncio.run(ui.run())
 
 
 if __name__ == "__main__":
