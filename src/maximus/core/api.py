@@ -5,12 +5,14 @@ This is the only interface the UI knows about.
 import json
 import logging
 import uuid
+from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
 from maximus.utils.llm import LLMClient
 from maximus.tools.registry import get_registry, ToolRegistry
 from maximus.core.safety import SafetyController
+from maximus.core.session_manager import SessionManager
 from maximus.models import AgentConfig
 
 logger = logging.getLogger(__name__)
@@ -23,7 +25,7 @@ class Session:
         self.session_id = session_id
         self.model = model
         self.messages: List[Dict[str, str]] = []
-        self.created_at = None
+        self.created_at = datetime.now()
         
     def add_message(self, role: str, content: str):
         self.messages.append({"role": role, "content": content})
@@ -33,7 +35,7 @@ class Session:
             "session_id": self.session_id,
             "model": self.model,
             "messages": self.messages,
-            "created_at": self.created_at
+            "created_at": self.created_at.isoformat() if self.created_at else None
         }
 
 
@@ -57,6 +59,7 @@ class MaximusBackend:
         self.sessions: Dict[str, Session] = {}
         self.sessions_dir = Path.home() / ".local" / "maximus" / "sessions"
         self.sessions_dir.mkdir(parents=True, exist_ok=True)
+        self.session_manager = SessionManager(self.sessions_dir)
         
         # System prompt
         self.system_prompt = self._build_system_prompt()
@@ -179,6 +182,49 @@ When user asks to write/edit files:
             session = Session(session_id, self.model)
             self.sessions[session_id] = session
         return self.sessions.get(session_id)
+    
+    def load_session_from_disk(self, session_id: str) -> Optional[Session]:
+        """Load a session from disk and restore message history.
+        
+        This loads the complete conversation including:
+        - All user messages
+        - All assistant responses
+        - Tool calls and results
+        - System messages
+        
+        Args:
+            session_id: Session ID to load
+            
+        Returns:
+            Session object with restored message history, or None if not found
+        """
+        # Load session data from disk
+        session_data = self.session_manager.load_session_data(session_id)
+        if not session_data:
+            logger.warning(f"Could not load session {session_id} from disk")
+            return None
+        
+        # Create session object
+        session = Session(session_id, session_data.get("model", self.model))
+        
+        # Restore all messages (preserves full context)
+        messages = session_data.get("messages", [])
+        session.messages = messages
+        
+        # Restore created_at if available
+        created_at_str = session_data.get("created_at")
+        if created_at_str:
+            try:
+                from datetime import datetime
+                session.created_at = datetime.fromisoformat(created_at_str)
+            except (ValueError, TypeError):
+                session.created_at = None
+        
+        # Add to sessions cache
+        self.sessions[session_id] = session
+        
+        logger.info(f"Restored session {session_id} with {len(messages)} messages")
+        return session
     
     def _save_session(self, session: Session):
         """Save session to disk."""

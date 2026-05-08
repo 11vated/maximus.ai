@@ -1,81 +1,96 @@
-# Maximus.ai - World-Class Coding Agent
+# Maximus.ai - Local AI Coding Assistant
 
 ## Overview
-**100% Free. 100% Unlimited. 100% Capable.**
+**100% Free. 100% Local. 100% Capable.**
 
-Maximus.ai is a world-class coding agent built entirely with free, local tools:
-- **Backend**: Python >=3.11 with 32 registered tools
-- **Frontend**: React + TypeScript with advanced terminal UI
-- **AI**: Local Ollama (qwen2.5-coder:7b) - no API costs
-- **Architecture**: Hybrid of Nexus + Open-SWE + Claude Code patterns
+Maximus.ai is a production-ready local coding assistant with Claude Code-like UX:
+- **AI**: Local Ollama - no API costs, no rate limits
+- **Entry Point**: Single unified command `python bin/maximus.py`
+- **Safety**: 3-layer system (prompt injection → tool wrapper → user confirmation)
+- **Hardware**: Automatic detection with Windows-first fallbacks
+
+## v2.0 UX
+
+### Single Command Interface
+```bash
+# Start interactive session (auto-detects hardware)
+python bin/maximus.py
+
+# Use specific model
+python bin/maximus.py -m 14b
+
+# Model aliases
+python bin/maximus.py -m fast   # codellama:7b - quick tasks
+python bin/maximus.py -m smart  # qwen2.5-coder:14b - complex code
+python bin/maximus.py -m think  # deepseek-r1:7b - reasoning
+
+# Debug mode
+python bin/maximus.py --verbose
+
+# Diagnostics
+python bin/maximus.py doctor
+```
+
+### Deprecated Commands (Hidden)
+The following commands are deprecated but still work with warnings:
+- `maximus run` → Use `python bin/maximus.py` instead
+- `maximus chat` → Use `python bin/maximus.py` instead
+- `maximus models` → Use `maximus doctor` instead
 
 ## Features
 
-### Backend (Python - 171 tests passing)
+### Core System
 - ✅ **8-State Cognitive Loop**: INIT → PLAN → ACT → OBSERVE → REFLECT → ADAPT → COMMIT → PAUSE
-- ✅ **32 Tools Registered**: read_file, write_file, execute_shell, grep, git tools, web_search, etc.
-- ✅ **Middleware Stack**: ToolError, MessageQueue, Sanitize, StepLimit (Open-SWE pattern)
-- ✅ **Memory System**: Short-term (rolling window) + Long-term (ChromaDB optional)
-- ✅ **Context Compaction**: 2-layer pipeline (rule-based + AI summary)
-- ✅ **Sub-Agent Spawning**: 5 agent types (general, coder, reviewer, researcher, tester)
-- ✅ **Conversation Branching**: Git-like branches + commit history
-- ✅ **MCP Integration**: Model Context Protocol support
-- ✅ **Stance System**: 7 behavior modes (exploratory, methodical, etc.)
-- ✅ **Sandbox Integration**: Docker-based isolated execution (Nexus pattern)
-- ✅ **Session Memory Sync**: Persistent sessions across tabs
+- ✅ **34+ Tools**: read_file, write_file, execute_shell, grep, glob, git, web tools
+- ✅ **Tool Safety**: 3-layer system with permission levels
+- ✅ **Memory**: Short-term (50 message rolling window) + Long-term (persistent store)
+- ✅ **Session Persistence**: Resume previous sessions with --session flag
+- ✅ **Event Streaming**: Real-time token-by-token output
 
-### Frontend (React - Build passing)
-- ✅ **Multi-Tab Support**: Create/switch/close tabs with independent sessions
-- ✅ **Visual Effects**: Particle background, glitch, scanlines, CRT curve
-- ✅ **4 Themes**: Cyberpunk Neon, Retro CRT, Minimalist, Data-Driven
-- ✅ **WebSocket Integration**: Real-time agent state updates
-- ✅ **Command Line**: Fixed contentEditable input (working)
-- ✅ **Agent Visualizer**: Shows current cognitive state
-- ✅ **TypeScript Build**: Clean compilation (332KB JS bundle)
+### Hardware Detection
+- Automatic model selection based on available RAM/GPU
+- Windows: Uses wmic/systeminfo for RAM detection
+- Falls back to qwen2.5-coder:7b for systems < 16GB RAM
+
+### Safety System
+1. **Layer 1**: Prompt injection detection - blocks malicious input
+2. **Layer 2**: Tool wrapper - preview required for write operations
+3. **Layer 3**: User confirmation - destructive operations need approval
 
 ## Quick Start
 
-### Backend
+### Installation
 ```bash
-# Install
 cd C:\Users\11vat\Desktop\agent007\maximus.ai
 pip install -e .
-
-# Start Ollama (in another terminal)
-ollama serve
-
-# Pull model
-ollama pull qwen2.5-coder:7b
-
-# Run CLI
-maximus "create a hello world script"
-
-# Start API server
-python -m uvicorn maximus.api.routes:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-### Frontend
+### Run
 ```bash
-cd C:\Users\11vat\Desktop\agent007\maximus.ai\maximus-terminal
-npm install
-npm run dev  # Dev server at http://localhost:5173
-npm run build  # Production build
+# Ensure Ollama is running
+ollama serve
+
+# Pull model (if not already)
+ollama pull qwen2.5-coder:7b
+
+# Start Maximus
+python bin/maximus.py
 ```
 
 ## Architecture
 
-### Hybrid Design (Best of 3 Repos)
-1. **Nexus**: 8-state cognitive loop, Docker sandbox, vector memory
-2. **Open-SWE**: Middleware stack, LangGraph patterns, webhook integrations
-3. **Claude Code**: Event streaming, tool safety, permission system
-
-### Key Files
+### Key Components
+- `bin/maximus.py` - Single entry point
 - `src/maximus/core/loop.py` - 8-state agent loop
-- `src/maximus/tools/registry.py` - Tool registration (32 tools)
-- `src/maximus/middleware/` - Open-SWE middleware stack
-- `src/maximus/memory/compaction.py` - 2-layer context compaction
-- `src/maximus/api/websocket.py` - Real-time event streaming
-- `maximus-terminal/src/components/` - React terminal components
+- `src/maximus/core/safety.py` - 3-layer safety system
+- `src/maximus/core/api.py` - Backend API
+- `src/maximus/tools/registry.py` - Tool registration
+- `src/maximus/ui/terminal.py` - Terminal UI
+
+### Design Patterns
+- **Claude Code**: Tool safety, permission system, event streaming
+- **Open-SWE**: Middleware stack, LangGraph patterns
+- **Nexus**: Cognitive loop, memory system
 
 ## Testing
 

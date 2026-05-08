@@ -22,6 +22,24 @@ def cli():
     pass
 
 
+def deprecated_command(message: str):
+    """Decorator to mark commands as deprecated with warning."""
+    def decorator(func):
+        func.__click_params__ = []
+        def wrapper(*args, **kwargs):
+            console.print(Panel(
+                f"[yellow]⚠️  DEPRECATED:[/yellow] {message}\n\n"
+                f"Please use 'maximus' (no arguments) for the new v2.0 experience.\n"
+                f"Run 'maximus --help' to see the new commands.",
+                title="Deprecation Warning",
+                border_style="yellow"
+            ))
+            return func(*args, **kwargs)
+        wrapper.__doc__ = f"(DEPRECATED) {func.__doc__}"
+        return wrapper
+    return decorator
+
+
 # Model aliases for easy switching
 MODEL_ALIASES = {
     "7b": "qwen2.5-coder:7b",
@@ -48,19 +66,19 @@ def resolve_model(model: str) -> str:
     return model
 
 
-@cli.command()
+@cli.command(hidden=True)
 @click.argument("prompt", required=False)
 @click.option("--model", "-m", default="qwen2.5-coder:7b", help="Ollama model (or alias: 7b, 14b, fast, smart, think)")
 @click.option("--workdir", default=".", help="Working directory")
 @click.option("--session", "session_id", default=None, help="Resume existing session")
+@deprecated_command("maximus run is deprecated. Use 'maximus' (no args) instead.")
 def run(prompt, model, workdir, session_id):
     """Run Maximus with a prompt or start interactive mode.
     
     Examples:
         maximus run "list files"
         maximus run "write code" -m 14b
-        maximus run "debug this" --fast
-        maximus run "think about it" --think
+    DEPRECATED: Use 'maximus' instead.
     """
     from maximus.models import AgentConfig
     from maximus.chat import ChatSession, SessionManager
@@ -109,17 +127,14 @@ def run(prompt, model, workdir, session_id):
         ctx.invoke(chat, model=model, workdir=workdir, session_id=session_id)
 
 
-@cli.command()
+@cli.command(hidden=True)
 @click.option("--model", "-m", default="qwen2.5-coder:7b", help="Ollama model (or alias: 7b, 14b, fast, smart, think)")
 @click.option("--workdir", default=".", help="Working directory")
 @click.option("--session", "session_id", default=None, help="Resume existing session")
+@deprecated_command("maximus chat is deprecated. Use 'maximus' (no args) instead.")
 def chat(model, workdir, session_id):
     """Start interactive chat session with full conversation history.
-    
-    Examples:
-        maximus chat
-        maximus chat -m 14b
-        maximus chat --think
+    DEPRECATED: Use 'maximus' instead.
     """
     from maximus.models import AgentConfig
     from maximus.chat import ChatSession, SessionManager
@@ -480,13 +495,11 @@ def status():
     console.print(f"[green]✓[/green] Python {sys.version_info.major}.{sys.version_info.minor}")
 
 
-@cli.command()
+@cli.command(hidden=True)
+@deprecated_command("maximus models is deprecated. Use 'python bin/maximus.py doctor' for diagnostics.")
 def models():
     """List available Ollama models with aliases.
-    
-    Examples:
-        maximus models
-        maximus models --available
+    DEPRECATED.
     """
     import httpx
     from rich.table import Table
@@ -528,14 +541,14 @@ def models():
         console.print("[yellow]Start Ollama with: ollama serve[/yellow]")
 
 
-@cli.command()
+@cli.command(hidden=True)
 @click.argument("query")
 @click.option("--language", "-l", default="python", help="Language: python, javascript, rust")
 @click.option("--limit", "-n", default=10, help="Number of results")
+@deprecated_command("maximus discover is deprecated. Package discovery is now an internal tool.")
 def discover(query, language, limit):
     """Discover open-source packages for your project.
-    
-    Example: maximus discover "async http client"
+    DEPRECATED: Now an internal tool.
     """
     from maximus.discovery import get_package_discovery
     from rich.progress import Progress
@@ -572,14 +585,12 @@ def discover(query, language, limit):
     console.print(f"\n[dim]Found {len(results)} packages[/dim]")
 
 
-@cli.command()
+@cli.command(hidden=True)
 @click.option("--show-defaults", is_flag=True, help="Show default configuration")
+@deprecated_command("maximus config is deprecated. Configuration is now automatic.")
 def config(show_defaults):
     """Show or edit Maximus configuration.
-    
-    Examples:
-        maximus config
-        maximus config --show-defaults
+    DEPRECATED: Configuration is now automatic.
     """
     from maximus.models import AgentConfig
     from pathlib import Path
@@ -605,13 +616,11 @@ def config(show_defaults):
     console.print(f"  trust_level: {cfg.trust_level.value}")
 
 
-@cli.command()
+@cli.command(hidden=True)
+@deprecated_command("maximus memory is deprecated. Memory is now automatic - use --clear flag in chat instead.")
 def memory():
     """Show Maximus memory status and contents.
-    
-    Examples:
-        maximus memory
-        maximus memory --clear
+    DEPRECATED.
     """
     from pathlib import Path
     from maximus.memory import MemoryMesh
@@ -639,12 +648,11 @@ def memory():
     console.print("\n[dim]Use MemoryMesh API for detailed operations[/dim]")
 
 
-@cli.command()
+@cli.command(hidden=True)
+@deprecated_command("maximus hooks is deprecated. Hooks are now configured via config file.")
 def hooks():
     """List available and registered hooks.
-    
-    Examples:
-        maximus hooks
+    DEPRECATED.
     """
     from maximus.hooks import get_hook_manager
     

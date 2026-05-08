@@ -124,5 +124,47 @@ class TestBackendAPI:
         assert session is None or session.session_id == session_id
 
 
+class TestSecurityPatterns:
+    """Test security pattern matching."""
+
+    def test_destructive_bash_blocked(self):
+        from maximus.security import CommandClassifier, CommandCategory
+        classifier = CommandClassifier()
+
+        result = classifier.classify("rm -rf /")
+        assert result.category == CommandCategory.BLOCKED
+
+        result = classifier.classify("rm -rf /tmp")
+        assert result.category == CommandCategory.NEEDS_CONFIRMATION
+
+    def test_safe_bash_allowed(self):
+        from maximus.security import CommandClassifier, CommandCategory
+        classifier = CommandClassifier()
+
+        result = classifier.classify("ls -la")
+        assert result.category == CommandCategory.SAFE
+
+        result = classifier.classify("git status")
+        assert result.category == CommandCategory.SAFE
+
+
+class TestCommandConfirmation:
+    """Test commands that need user confirmation."""
+
+    def test_destructive_needs_confirmation(self):
+        from maximus.security import CommandClassifier, CommandCategory
+        classifier = CommandClassifier()
+
+        result = classifier.classify("rm -rf /tmp/test")
+        assert result.category == CommandCategory.NEEDS_CONFIRMATION
+
+    def test_unknown_needs_confirmation(self):
+        from maximus.security import CommandClassifier, CommandCategory
+        classifier = CommandClassifier()
+
+        result = classifier.classify("some_unknown_command")
+        assert result.category == CommandCategory.NEEDS_CONFIRMATION
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
