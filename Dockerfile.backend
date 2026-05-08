@@ -1,17 +1,32 @@
+# Production Dockerfile for Maximus Backend
 FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install dependencies
-COPY pyproject.toml .
-RUN pip install hatchling && pip install -e .
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy source
-COPY src/ /app/src/
-COPY maximus/ /app/maximus/
+# Install Python dependencies
+COPY pyproject.toml ./
+RUN pip install --no-cache-dir -e .
+
+# Copy source code
+COPY src/ ./src/
+COPY bin/ ./bin/
+
+# Create non-root user
+RUN useradd -m -u 1000 maximus
+USER maximus
 
 # Expose port
 EXPOSE 8000
 
-# Run the API server
-CMD ["uvicorn", "maximus.api.routes:app", "--host", "0.0.0.0", "--port", "8000"]
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Run the backend server
+CMD ["python", "-m", "maximus.core.api"]
