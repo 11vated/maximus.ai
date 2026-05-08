@@ -5,6 +5,7 @@ This is the only interface the UI knows about.
 import json
 import logging
 import uuid
+import asyncio
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, Any, List
@@ -16,6 +17,25 @@ from maximus.core.session_manager import SessionManager
 from maximus.models import AgentConfig
 
 logger = logging.getLogger(__name__)
+
+# Global event loop for reusing across calls (avoids "Event loop is closed" errors)
+_event_loop: Optional[asyncio.AbstractEventLoop] = None
+
+
+def _get_event_loop():
+    """Get or create the global event loop."""
+    global _event_loop
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+    
+    if loop is None:
+        if _event_loop is None or _event_loop.is_closed():
+            _event_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(_event_loop)
+        loop = _event_loop
+    return loop
 
 
 class Session:
@@ -125,8 +145,7 @@ When user asks to write/edit files:
         
         full_response = ""
         
-        # Call LLM with tools
-        import asyncio
+        # Call LLM with tools using global event loop
         async def call_llm():
             nonlocal full_response
             async for chunk in self.llm.chat(messages, tools=schemas):
@@ -149,7 +168,8 @@ When user asks to write/edit files:
                             "name": tool_name
                         })
         
-        asyncio.run(call_llm())
+        loop = _get_event_loop()
+        loop.run_until_complete(call_llm())
         
         return full_response if full_response else "I'm ready to help with your code."
     
