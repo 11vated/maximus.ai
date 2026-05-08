@@ -35,7 +35,7 @@ vector = ["chromadb>=0.4", "duckduckgo-search>=7.0"]
 all = ["tui", "vector"]
 
 [project.scripts]
-maximus = "maximus.cli:cli"
+maximus = "maximus.ui.terminal:main"
 maximus-tui = "maximus.tui.app:main"
 
 [tool.hatch.build.targets.wheel]

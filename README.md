@@ -94,16 +94,10 @@ python bin/maximus.py
 
 ## Testing
 
-### Python (171 tests passing)
+### Python (12 tests passing)
 ```bash
 cd C:\Users\11vat\Desktop\agent007\maximus.ai
-pytest tests/ -v
-```
-
-### React (2 tests passing)
-```bash
-cd C:\Users\11vat\Desktop\agent007\maximus.ai\maximus-terminal
-npx vitest run
+pytest tests/e2e/ -v
 ```
 
 ## World-Class Goals - Status
@@ -125,12 +119,10 @@ npx vitest run
 | Conversation Branching | ✅ Complete | Maximus (new) |
 | MCP Integration | ✅ Complete | Maximus (new) |
 
-## Next Steps (Phase 3-4)
-- [ ] Virtual scrolling for terminal output
-- [ ] Error boundaries + retry logic
-- [ ] E2E tests with Playwright
-- [ ] Docker Compose for full stack
-- [ ] Production deployment guide
+## Next Steps (Phase 6+)
+- [ ] TUI overhaul with Textual
+- [ ] MCP server integration
+- [ ] Advanced benchmarking tools
 
 ## License
 MIT
