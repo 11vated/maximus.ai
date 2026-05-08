@@ -1,17 +1,23 @@
-"""Terminal UI - Simple, unified chat interface with session persistence.
+"""Terminal UI - Advanced terminal interface with virtual scrolling.
 
 Single entry point for the Maximus chat experience.
 Features:
 - Interactive session menu to resume previous conversations
 - Session history with metadata
 - Support for --session, --new, --list-sessions flags
+- Virtual scrolling for long conversations
+- Error boundaries with retry logic
+- Rich streaming output
 """
 import sys
 import os
 import signal
 import getpass
 import uuid
+import time
 from datetime import datetime
+from collections import deque
+from typing import Optional, List
 
 # Add src to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
@@ -20,9 +26,82 @@ from maximus.utils.ollama import ensure_ollama_running, get_default_model
 from maximus.core.api import MaximusBackend
 from maximus.core.session_manager import SessionManager
 
+# Terminal constants
+MAX_OUTPUT_LINES = 500  # Virtual scroll buffer size
+ERROR_RETRY_ATTEMPTS = 3
+ERROR_RETRY_DELAY = 1  # seconds
+
+
+class VirtualScrollBuffer:
+    """Virtual scrolling buffer for terminal output.
+    
+    Keeps only the most recent lines in memory to prevent memory issues
+    with long conversations.
+    """
+    
+    def __init__(self, max_lines: int = MAX_OUTPUT_LINES):
+        self.max_lines = max_lines
+        self.lines: deque = deque(maxlen=max_lines)
+        self.total_lines = 0
+        
+    def add(self, text: str):
+        """Add text to buffer, respecting max_lines."""
+        for line in text.split('\n'):
+            self.lines.append(line)
+            self.total_lines += 1
+            
+    def get_visible(self) -> List[str]:
+        """Get visible lines (most recent max_lines)."""
+        return list(self.lines)
+    
+    def get_scrolled(self, offset: int = 0) -> List[str]:
+        """Get lines scrolled back by offset."""
+        lines = list(self.lines)
+        if offset >= len(lines):
+            return []
+        return lines[-(self.max_lines - offset):] if offset > 0 else lines
+
+
+class ErrorBoundary:
+    """Error boundary with retry logic and graceful degradation."""
+    
+    def __init__(self, max_retries: int = ERROR_RETRY_ATTEMPTS):
+        self.max_retries = max_retries
+        self.retry_count = 0
+        self.last_error: Optional[Exception] = None
+        
+    def execute(self, func, *args, **kwargs):
+        """Execute function with retry logic."""
+        for attempt in range(self.max_retries):
+            try:
+                self.retry_count = attempt
+                return func(*args, **kwargs)
+            except (ConnectionError, TimeoutError) as e:
+                self.last_error = e
+                if attempt < self.max_retries - 1:
+                    time.sleep(ERROR_RETRY_DELAY * (attempt + 1))
+                    continue
+                raise
+            except Exception as e:
+                self.last_error = e
+                raise
+        return None
+    
+    def reset(self):
+        """Reset retry counter."""
+        self.retry_count = 0
+        self.last_error = None
+
 
 class TerminalUI:
-    """Simple terminal-based chat interface with session management."""
+    """Advanced terminal-based chat interface with session management.
+    
+    Features:
+    - Virtual scrolling for long conversations
+    - Error boundaries with retry logic
+    - Session persistence with menu
+    - Rich streaming output
+    """
     
     def __init__(self, model: str = None, verbose: bool = False, session_id: str = None, force_new: bool = False, show_menu: bool = False):
         self.verbose = verbose
@@ -32,11 +111,44 @@ class TerminalUI:
         self.backend = None
         self.model = model
         self.session_manager = None
+        self.output_buffer = VirtualScrollBuffer()
+        self.error_boundary = ErrorBoundary()
+        self.use_rich_output = self._detect_rich_support()
+        
+    def _detect_rich_support(self) -> bool:
+        """Detect if rich output is supported."""
+        try:
+            import sys
+            return sys.stdout.isatty() and os.environ.get('TERM')
+        except:
+            return False
         
     def log(self, msg: str):
         """Log message if verbose mode."""
         if self.verbose:
             print(f"[DEBUG] {msg}", file=sys.stderr)
+            
+    def stream_output(self, text: str, end: str = "\n"):
+        """Stream output with virtual scrolling support."""
+        self.output_buffer.add(text)
+        if self.use_rich_output and len(self.output_buffer.lines) > self.output_buffer.max_lines:
+            # Only show most recent lines
+            visible = self.output_buffer.get_visible()
+            for line in visible[-100:]:  # Show last 100 lines
+                print(line)
+        else:
+            print(text, end=end)
+            
+    def safe_execute(self, func, *args, **kwargs):
+        """Execute function with error boundary."""
+        try:
+            return self.error_boundary.execute(func, *args, **kwargs)
+        except Exception as e:
+            self.stream_output(f"\n[ERROR] {e}\n", file=sys.stderr)
+            if self.verbose:
+                import traceback
+                traceback.print_exc()
+            return None
             
     def init_backend(self):
         """Initialize the backend - ensures Ollama running."""
@@ -131,96 +243,93 @@ class TerminalUI:
         print()
     
     def run(self):
-        """Main chat loop."""
+        """Main chat loop with error handling."""
         self.init_backend()
-        
+
         # Handle session selection
         if self.force_new:
-            # --new flag: skip menu and use new session
             self.session_id = str(uuid.uuid4())[:8]
         elif self.show_menu:
-            # --list-sessions flag during startup would show menu
             selected = self.show_session_menu()
             if selected:
-                # Load selected session from disk
                 self.session_id = selected
-                restored_session = self.backend.load_session_from_disk(selected)
+                restored_session = self.safe_execute(
+                    lambda: self.backend.load_session_from_disk(selected)
+                )
                 if restored_session:
-                    print(f"Session restored with {len(restored_session.messages)} previous messages", file=sys.stderr)
+                    self.stream_output(f"Session restored with {len(restored_session.messages)} previous messages\n", file=sys.stderr)
                 else:
-                    print(f"Warning: Could not restore session {selected}, starting fresh", file=sys.stderr)
+                    self.stream_output(f"Warning: Could not restore session {selected}, starting fresh\n", file=sys.stderr)
                     self.session_id = str(uuid.uuid4())[:8]
             else:
-                # New session
                 self.session_id = str(uuid.uuid4())[:8]
         elif self.session_id:
-            # --session <id> flag: load specific session
-            restored_session = self.backend.load_session_from_disk(self.session_id)
+            restored_session = self.safe_execute(
+                lambda: self.backend.load_session_from_disk(self.session_id)
+            )
             if not restored_session:
-                print(f"Warning: Session {self.session_id} not found, starting fresh", file=sys.stderr)
+                self.stream_output(f"Warning: Session {self.session_id} not found, starting fresh\n", file=sys.stderr)
                 self.session_id = str(uuid.uuid4())[:8]
             else:
-                print(f"Session restored with {len(restored_session.messages)} previous messages", file=sys.stderr)
+                self.stream_output(f"Session restored with {len(restored_session.messages)} previous messages\n", file=sys.stderr)
         else:
-            # No flags: show menu to choose
             selected = self.show_session_menu()
             if selected:
                 self.session_id = selected
-                restored_session = self.backend.load_session_from_disk(selected)
+                restored_session = self.safe_execute(
+                    lambda: self.backend.load_session_from_disk(selected)
+                )
                 if restored_session:
-                    print(f"Session restored with {len(restored_session.messages)} previous messages", file=sys.stderr)
+                    self.stream_output(f"Session restored with {len(restored_session.messages)} previous messages\n", file=sys.stderr)
                 else:
-                    print(f"Warning: Could not restore session {selected}, starting fresh", file=sys.stderr)
+                    self.stream_output(f"Warning: Could not restore session {selected}, starting fresh\n", file=sys.stderr)
                     self.session_id = str(uuid.uuid4())[:8]
             else:
                 self.session_id = str(uuid.uuid4())[:8]
-        
+
         prompt = ">>> "
-        
+
         while True:
             try:
-                # Get user input
                 user_input = input(prompt)
-                
-                # Check for exit commands
+
                 if user_input.strip().lower() in ['exit', 'quit', 'q']:
                     print("Goodbye!")
                     break
-                
-                # Skip empty input
+
                 if not user_input.strip():
                     continue
-                
-                # Clear screen command
+
                 if user_input.strip() == 'clear':
+                    self.output_buffer = VirtualScrollBuffer()
                     print("\033[2J\033[H", end="")
                     continue
-                
-                # List sessions command
+
                 if user_input.strip() == '--list-sessions':
                     self.list_sessions_in_chat()
                     continue
-                
-                # Process message through backend
+
                 if self.backend:
-                    response = self.backend.process_message(
+                    response = self.safe_execute(
+                        self.backend.process_message,
                         user_input, 
                         self.session_id
                     )
-                    print(response)
-                    
+                    if response:
+                        self.stream_output(response)
+                    self.error_boundary.reset()
+
             except KeyboardInterrupt:
                 print("\nUse 'exit' to quit")
                 continue
             except EOFError:
                 break
             except Exception as e:
-                print(f"Error: {e}", file=sys.stderr)
+                self.stream_output(f"Error: {e}\n", file=sys.stderr)
                 if self.verbose:
                     import traceback
                     traceback.print_exc()
-                    
-        # Cleanup
+
         if self.backend:
             self.backend.shutdown()
 
