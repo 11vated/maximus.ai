@@ -187,9 +187,55 @@ class DockerSandbox(SandboxBackend):
             )
             await proc.communicate()
             logger.info("Docker sandbox initialized")
+            await self._ensure_image()
         except FileNotFoundError:
             logger.warning("Docker not available - falling back to LocalSandbox")
             self._config.sandbox_type = SandboxType.LOCAL
+
+    async def _ensure_image(self) -> None:
+        """Improve docker opt-in: ensure image exists (build or pull support)."""
+        if not self._config:
+            return
+        image = self._config.docker_image
+        try:
+            # Check if image exists locally
+            proc = await asyncio.create_subprocess_exec(
+                "docker", "images", "-q", image,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            out, _ = await proc.communicate()
+            if out.strip():
+                return  # image present
+            logger.info(f"Docker image {image} not found locally; attempting pull/build for opt-in support")
+            # Prefer pull for reliable base; fallback build using project Dockerfile if present
+            try:
+                pull = await asyncio.create_subprocess_exec(
+                    "docker", "pull", "python:3.11-slim",
+                    stdout=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.DEVNULL
+                )
+                await pull.communicate()
+                # tag as our image for compatibility
+                tag = await asyncio.create_subprocess_exec(
+                    "docker", "tag", "python:3.11-slim", image,
+                    stdout=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.DEVNULL
+                )
+                await tag.communicate()
+                logger.info(f"Prepared docker image {image} via base pull")
+            except Exception:
+                # try build from existing backend dockerfile as last resort (may need tweaks for sandbox)
+                if Path("Dockerfile.backend").exists():
+                    build = await asyncio.create_subprocess_exec(
+                        "docker", "build", "-t", image, "-f", "Dockerfile.backend", ".",
+                        stdout=asyncio.subprocess.DEVNULL,
+                        stderr=asyncio.subprocess.DEVNULL
+                    )
+                    await build.communicate()
+                    logger.info(f"Built {image} from Dockerfile.backend")
+        except Exception as e:
+            logger.debug(f"Image ensure step skipped (docker may be unavailable in this env): {e}")
 
     async def execute(
         self,
