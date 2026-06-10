@@ -78,3 +78,43 @@ def test_plan_creation():
     )
     assert plan.goal == "Test goal"
     assert len(plan.steps) == 1
+
+
+# --- Phase D / MemoryMesh KG harness tests (expand deterministic coverage for Graphiti cross + gem ingest paths) ---
+def test_knowledge_graph_memory():
+    """Test direct KG node/edge ops (core of mcp-knowledge-graph integration)."""
+    from maximus.memory.memory_mesh import KnowledgeGraphMemory
+    kg = KnowledgeGraphMemory()
+    kg.add_relation("Maximus", "uses", "KnowledgeGraphMemory")
+    assert len(kg._edges) >= 1
+    res = kg.query_related("Maximus", limit=5)
+    assert len(res) >= 1
+    assert any(r.get("type") in ("edge", "node") for r in res)
+
+
+def test_memory_mesh_kg_methods():
+    """Test MemoryMesh KG extensions (add_knowledge_triple, query, context inclusion)."""
+    from maximus.memory.memory_mesh import MemoryMesh, KnowledgeLayer
+    mesh = MemoryMesh()
+    # add via helper (exercises binding + dual semantic+kg write)
+    entry = mesh.add_knowledge_triple(
+        "AgentLoop", "integrates", "KG+MemoryMesh",
+        layer=KnowledgeLayer.DOMAIN, tags=["phase_d"], provenance="test"
+    )
+    assert entry is not None
+    assert len(mesh.knowledge_graph._edges) >= 1
+    # query
+    qres = mesh.query_knowledge_graph("AgentLoop", limit=5)
+    assert len(qres) >= 1
+    # context includes KG section
+    ctx = mesh.to_context()
+    assert "Knowledge Graph" in ctx or "kg" in ctx.lower()
+
+
+def test_kg_ingest_shape():
+    """Smoke shape for ingest bridge (mcp -> mesh). Does not require live MCP server."""
+    from maximus.memory.memory_mesh import MemoryMesh
+    mesh = MemoryMesh()
+    # Simulate what ingest_knowledge_from_mcp_to_mesh would do
+    mesh.add_knowledge_triple("test_subject", "test_pred", "test_obj", provenance="mcp:knowledge-graph")
+    assert any("mcp:knowledge-graph" in str(e) for e in mesh.knowledge_graph._edges)

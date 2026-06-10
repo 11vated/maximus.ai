@@ -349,6 +349,15 @@ Output:"""
             layer=KnowledgeLayer.DOMAIN,
             tags=["routing", self._session_id]
         )
+        # Light KG integration demo (exercises Phase D Graphiti/mcp-knowledge-graph cross)
+        self.memory.add_knowledge_triple(
+            f"intent:{self._current_routing.intent.value}",
+            "routes_to",
+            self._current_routing.model,
+            layer=KnowledgeLayer.DOMAIN,
+            tags=["routing", "kg"],
+            provenance="agent_loop"
+        )
         
         # Build contextual prompt with memory
         system_prompt = self._build_contextual_prompt(goal)
@@ -534,6 +543,15 @@ Output:"""
                         "task_completed",
                         f"Task completed successfully: {goal[:80]}",
                         {"session_id": self._session_id}
+                    )
+                    # Light KG integration (Phase D): record completion as knowledge triple
+                    self.memory.add_knowledge_triple(
+                        "task",
+                        "completed_for",
+                        goal[:60],
+                        layer=KnowledgeLayer.INTENT,
+                        tags=["completion", "kg"],
+                        provenance="agent_loop"
                     )
                     
                     break
