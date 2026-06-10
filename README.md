@@ -1,15 +1,15 @@
 # Maximus.ai - Local AI Coding Assistant
 
 ## Overview
-**100% Free. 100% Local. 100% Capable.**
+**100% Free (core). Local-first (Ollama). Capable (with opt-in MCP/web for extended reach).**
 
-Maximus.ai is a production-ready local coding assistant with Claude Code-like UX:
+Maximus.ai is an ambitious local AI coding platform (early 0.1.0, active development) with Claude Code-like UX (core paths 100% local via Ollama; extended MCP/web tools opt-in):
 - **AI**: Local Ollama - no API costs, no rate limits
 - **Entry Point**: Single unified command `python bin/maximus.py`
 - **Safety**: 3-layer system (prompt injection → tool wrapper → user confirmation)
 - **Hardware**: Automatic detection with Windows-first fallbacks
 
-## v2.0 UX
+## Current UX (Roadmap target: v2.0)
 
 ### Single Command Interface
 ```bash
@@ -40,12 +40,12 @@ The following commands are deprecated but still work with warnings:
 ## Features
 
 ### Core System
-- ✅ **8-State Cognitive Loop**: INIT → PLAN → ACT → OBSERVE → REFLECT → ADAPT → COMMIT → PAUSE
-- ✅ **34+ Tools**: read_file, write_file, execute_shell, grep, glob, git, web tools
-- ✅ **Tool Safety**: 3-layer system with permission levels
-- ✅ **Memory**: Short-term (50 message rolling window) + Long-term (persistent store)
-- ✅ **Session Persistence**: Resume previous sessions with --session flag
-- ✅ **Event Streaming**: Real-time token-by-token output
+- ✅ **8-State Cognitive Loop**: INIT/PLAN/THINK/ACT/VERIFY/COMMIT/PAUSE/REFLECT (core functional in loop.py)
+- ~35+ **Tools** (dynamic registry + real MCP integration; read_file, write_file, execute_shell, grep, git, web, system + MCP-wrapped)
+- ✅ **Tool Safety**: 3-layer system (layer2 pre-execution enforced; layer3 in UI/auto paths)
+- ✅ **Memory**: Short-term + Long-term (MemoryMesh + compaction with Ollama)
+- ✅ **Session Persistence**: Basic support
+- ✅ **Event Streaming**: Real-time via terminal + hooks (Langfuse-style tracing notes)
 
 ### Hardware Detection
 - Automatic model selection based on available RAM/GPU
@@ -61,20 +61,19 @@ The following commands are deprecated but still work with warnings:
 
 ### Installation
 ```bash
-cd C:\Users\11vat\Desktop\agent007\maximus.ai
+cd /path/to/maximus.ai   # or your clone of https://github.com/11vated/maximus.ai
 pip install -e .
 ```
 
-### Run
+### Run (requires Ollama running locally for full LLM cycles)
 ```bash
-# Ensure Ollama is running
+# Ensure Ollama is running + model pulled (core is local-first)
 ollama serve
-
-# Pull model (if not already)
 ollama pull qwen2.5-coder:7b
 
-# Start Maximus
+# Start Maximus (terminal UI primary; React planned)
 python bin/maximus.py
+# or: python -m maximus
 ```
 
 ## Architecture
@@ -104,25 +103,27 @@ pytest tests/e2e/ -v
 
 | Feature | Status | Source Pattern |
 |---------|--------|---------------|
-| 8-State Cognitive Loop | ✅ Complete | Nexus |
-| 32 Tools Registered | ✅ Complete | ClawSpring |
-| Middleware Stack | ✅ Complete | Open-SWE |
-| Docker Sandbox | ✅ Complete | Nexus |
-| Vector Memory | ✅ Complete | Nexus |
-| Context Compaction | ✅ Complete | Maximus (enhanced) |
-| Multi-Tab UI | ✅ Complete | Maximus (new) |
-| Visual Effects | ✅ Complete | Maximus (new) |
-| WebSocket Events | ✅ Complete | ClawSpring |
-| React Terminal | ✅ Build passes | Maximus (new) |
-| Typing Fixed | ✅ Complete | N/A (bug fix) |
-| Sub-Agent Spawning | ✅ Complete | Nexus |
-| Conversation Branching | ✅ Complete | Maximus (new) |
-| MCP Integration | ✅ Complete | Maximus (new) |
+| 8-State Cognitive Loop | ✅ Core (states + hooks + safety/MCP integration) | loop.py + Nexus patterns |
+| ~35+ Tools Registered (dynamic) | Partial / In progress (mocks removed; real MCP manager wired to registry/loop; ~35 incl. builtin + wrappers) | registry + mcp/manager.py |
+| Middleware Stack | Partial (core present; full 6-layer aspirational) | middleware/ |
+| Docker Sandbox | Local subprocess reliable (default; Docker opt-in via sandbox/) | sandbox.py (post-fix) |
+| Vector Memory | Optional (chromadb extra; MemoryMesh primary) | memory/ + vector_memory.py |
+| Context Compaction | ✅ (real Ollama summary in compaction.py) | memory/compaction.py |
+| Multi-Tab UI | Terminal primary (single-session strong); multi-tab planned | ui/terminal.py |
+| Visual Effects | Basic (rich output); advanced planned | ui/ + tui/ |
+| WebSocket Events | Partial (api/websocket.py exists; full streaming in terminal) | api/ |
+| React Terminal | Planned (see REACT_TERMINAL_PLAN.md + backlog High); CI/Docker refs exist but no source tree | (absent maximus-terminal/) |
+| Sub-Agent Spawning | Partial (multi_agent/spawner.py; secondary path) | multi_agent/ |
+| Conversation Branching | Partial (memory/branching.py present) | memory/branching.py |
+| MCP Integration | Core real (unified manager.py; thin delegates; MCPToolWrapper + register; loop schemas use real list_tools) | mcp/manager.py + tools/mcp_wrapper.py + builtin (mocks removed per Critical backlog) |
 
-## Next Steps (Phase 6+)
-- [ ] TUI overhaul with Textual
-- [ ] MCP server integration
-- [ ] Advanced benchmarking tools
+## Next Steps (Phase 6+ per execution-plan.md backlog)
+- [x] Update stale claims / version / docs mismatch (this pass)
+- [ ] Frontend decision (implement minimal TUI enhancements or excise React/CI/Docker refs; High backlog)
+- [ ] Full evals/benchmarks harness (Medium)
+- [ ] Wire more hidden-gem MCPs + RAG/KG (Phase D: mcp-knowledge-graph etc.)
+- [ ] Production polish: real Docker sandbox opt-in, more traces, adapter cleanup
+- [ ] Self-improvement loop using library skills + subagents (future-arch)
 
 ## License
 MIT

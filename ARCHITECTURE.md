@@ -1,5 +1,7 @@
 # Maximus.ai Architecture Design
-**Phase 2 Deliverable**
+**Design Document (Phase 2 baseline)**
+
+> **Status note (post-claims update)**: This is the target/aspirational design from Phase 2. Current reality (0.1.0): core 8-state loop + MemoryMesh + unified real MCP (mocks removed) + deterministic router + safety layer2 pre-enforced + local sandbox reliable + ~35 dynamic tools are functional. Frontend (React) absent (terminal primary; see REACT_TERMINAL_PLAN + High backlog), full evals/research node/ production Docker polish in progress per maximus-execution-plan.md Critical/High items. "Phase 2 Deliverable" claims and README "✅ Complete" table updated for accuracy. Re-verify against code + tests before assuming completeness. Sources: execution-plan.md (backlog title: "Update all over-claims / version / docs mismatch (README/AGENTS/ARCH/PRD to reality)"), README, audit artifacts 2026-06-10.
 
 ---
 

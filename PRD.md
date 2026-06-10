@@ -1,11 +1,13 @@
 # Maximus.ai Product Requirements Document
-**Phase 1 Deliverable**
+**PRD (Phase 1 vision baseline; see execution-plan.md for current backlog status)**
+
+> **Accuracy note**: "production-ready" vision is the target. Current (0.1.0 early): core agent loop + safety + real MCP + router + memory compaction + terminal CLI functional and locally runnable (with Ollama). Many FRs (full auto-backend transparency, advanced multi-tab/React, production evals, complete Docker) are partial or planned. Claims updated in README/AGENTS/ARCH per Critical backlog item. This PRD remains useful as requirements reference.
 
 ---
 
 ## 1. Product Vision
 
-Create a seamless, production-ready coding assistant that feels as simple as typing `claude` - where the user types one command and immediately gets a helpful coding partner, with all complexity hidden behind the scenes.
+Create a seamless, local-first coding assistant (target production-grade) that feels as simple as typing `claude` - where the user types one command and immediately gets a helpful coding partner, with core complexity (Ollama, loop, safety, tools, MCP) handled transparently. (Current: early 0.1.0 with working core paths.)
 
 ## 2. Target Users
 
