@@ -420,3 +420,15 @@ class MCPManager:
     def get_capabilities(self, server_name: str) -> Optional[Dict]:
         """Get server capabilities."""
         return self._capabilities_cache.get(server_name)
+
+
+# Global MCP manager instance
+_mcp_manager: Optional["MCPManager"] = None
+
+
+def get_mcp_manager() -> "MCPManager":
+    """Get the global MCP manager instance."""
+    global _mcp_manager
+    if _mcp_manager is None:
+        _mcp_manager = MCPManager()
+    return _mcp_manager

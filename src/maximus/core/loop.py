@@ -155,23 +155,18 @@ Output:"""
         self._mcp_initialized = False
     
     async def _init_mcp_tools(self):
-        """Initialize MCP tools and add to registry."""
+        """Initialize MCP tools and add to registry using unified real implementation."""
         if self._mcp_initialized:
             return
             
         try:
-            from maximus.mcp.mcp_manager import get_mcp_manager
             mcp_manager = get_mcp_manager()
-            await mcp_manager.initialize()
-            
-            # Get all MCP tools and add them to the tool schema list
-            for server_name, server in mcp_manager.servers.items():
-                if server.is_running:
-                    logger.info(f"MCP server '{server_name}' has {len(server.tools)} tools")
-            
+            # For the full manager, servers are configs; connect known if needed
+            # Real tools come from connected servers via list_tools
             self._mcp_manager = mcp_manager
             self._mcp_initialized = True
-            logger.info("MCP tools initialized")
+            logger.info("MCP tools initialized (real unified manager)")
+            # Note: to register to LLM schemas, extend _get_tool_schemas or call mcp_manager.list_tools()
         except Exception as e:
             logger.debug(f"MCP initialization not available: {e}")
 
@@ -180,7 +175,7 @@ Output:"""
         return self.SYSTEM_PROMPT.format(goal=goal)
 
     def _get_tool_schemas(self) -> List[Dict]:
-        """Get tool definitions in Ollama format."""
+        """Get tool definitions in Ollama format. Includes real MCP tools from unified manager."""
         tool_names = self.registry.list_tools()
         schemas = []
         for tool_name in tool_names:
@@ -200,6 +195,21 @@ Output:"""
                 }
             }
             schemas.append(schema)
+        # Add real MCP tools from unified manager (no mocks)
+        if self._mcp_manager:
+            try:
+                mcp_tools = self._mcp_manager.list_tools()
+                for t in mcp_tools:
+                    schemas.append({
+                        "type": "function",
+                        "function": {
+                            "name": f"mcp_{t.name}",
+                            "description": t.description or f"MCP tool {t.name}",
+                            "parameters": t.input_schema or {}
+                        }
+                    })
+            except Exception:
+                pass
         return schemas
 
     def _get_memory_context(self, query: str = "") -> str:
@@ -401,11 +411,19 @@ Output:"""
                     ):
                         result = {"success": False, "error": "Blocked by PRE_TOOL hook"}
                     else:
-                        # Execute tool with retry
-                        result = await self._execute_tool_with_retry(
-                            tool_call.name, 
-                            tool_call.arguments
-                        )
+                        # Safety layer2 pre-execution validation
+                        try:
+                            from maximus.core.safety import get_safety_controller
+                            safety = get_safety_controller()
+                            safety.layer2_check(tool_call.name, tool_call.arguments, {"session_id": self._session_id})
+                        except Exception as se:
+                            result = {"success": False, "error": f"Safety pre-check failed: {se}"}
+                        else:
+                            # Execute tool with retry
+                            result = await self._execute_tool_with_retry(
+                                tool_call.name, 
+                                tool_call.arguments
+                            )
                     
                     # Bi-Operation: Process action for loop detection and interventions
                     try:

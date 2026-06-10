@@ -1,17 +1,19 @@
 """MCP Connector for Maximus.
 
 Handles connection lifecycle and discovery.
+Uses the unified full MCP manager implementation.
 """
 import logging
 from typing import List
 
-from maximus.mcp.client import get_mcp_client
+from maximus.mcp import get_mcp_manager
+from maximus.mcp.manager import MCPServerConfig, TransportType
 
 logger = logging.getLogger(__name__)
 
 
 async def add_server(name: str, url: str) -> bool:
-    """Add an MCP server by name and URL.
+    """Add an MCP server by name and URL using the unified real implementation.
     
     Args:
         name: Unique identifier for the server
@@ -20,30 +22,51 @@ async def add_server(name: str, url: str) -> bool:
     Returns:
         True if successful
     """
-    client = get_mcp_client()
-    return await client.add_server(name, url)
+    manager = get_mcp_manager()
+    try:
+        if url.startswith("file://"):
+            path = url.replace("file://", "") or "/"
+            config = MCPServerConfig(
+                name=name,
+                command=["npx", "-y", "@modelcontextprotocol/server-filesystem", path],
+                transport=TransportType.STDIO
+            )
+        else:
+            config = MCPServerConfig(
+                name=name,
+                command=["npx", "-y", f"@modelcontextprotocol/server-{name}"],
+                transport=TransportType.STDIO
+            )
+        manager.add_server(config)
+        await manager.connect_server(name)
+        return True
+    except Exception as e:
+        logger.error(f"Failed to add MCP server {name}: {e}")
+        return False
 
 
 def list_available_servers() -> List[str]:
     """List all available MCP server types."""
-    return ["github://", "npm://", "file://"]
+    return ["github", "filesystem", "brave-search"]
 
 
 async def auto_discover_servers() -> List[str]:
-    """Auto-discover common MCP servers."""
-    # Discover popular servers
+    """Auto-discover common MCP servers using real manager."""
+    manager = get_mcp_manager()
     discovered = []
     
-    # Common GitHub repos with MCP servers
-    github_servers = [
-        ("github", "github:///modelcontextprotocol/servers"),
-        ("filesystem", "file:///"),
-        ("sqlite", "github:///modelcontextprotocol/servers/sqlite"),
-    ]
-    
-    for name, url in github_servers:
+    known = ["filesystem", "github", "brave-search"]
+    for name in known:
         try:
-            if await add_server(name, url):
+            servers = manager.get_servers()
+            if name not in [s["name"] for s in servers]:
+                config = MCPServerConfig(
+                    name=name,
+                    command=["npx", "-y", f"@modelcontextprotocol/server-{name}"],
+                    transport=TransportType.STDIO
+                )
+                manager.add_server(config)
+                await manager.connect_server(name)
                 discovered.append(name)
         except Exception as e:
             logger.warning(f"Failed to auto-discover {name}: {e}")
