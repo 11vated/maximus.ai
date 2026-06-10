@@ -313,15 +313,30 @@ class ModelRouter:
             self._thinking_model = model
     
     def route(self, prompt: str) -> RoutingDecision:
-        """Route a prompt to the optimal model - simplified."""
-        # Use qwen2.5-coder:7b as default - it's available
-        model_config = self.models.get("qwen2.5-coder:7b") or list(self.models.values())[0]
+        """Route a prompt to the optimal model using real deterministic logic."""
+        intent = self.intent_detector.detect(prompt)
+        complexity = self.complexity_scorer.score(prompt, intent)
+        
+        # Choose thinking model for high complexity or specific intents
+        if complexity in (ComplexityLevel.EXPERT, ComplexityLevel.COMPLEX) or intent in (TaskIntent.DEBUGGING, TaskIntent.ARCHITECTURE, TaskIntent.RESEARCH):
+            model_name = self._thinking_model
+            reasoning = f"High complexity or reasoning intent ({intent.value}), using thinking model"
+        else:
+            # Find recommended model for intent
+            model_name = self._default_model
+            for name, config in self.models.items():
+                if intent in config.recommended_for:
+                    model_name = name
+                    break
+            reasoning = f"Intent {intent.value}, complexity {complexity.value}, using {model_name}"
+        
+        model_config = self.models.get(model_name) or list(self.models.values())[0]
         
         return RoutingDecision(
             model=model_config.name,
-            intent=TaskIntent.GENERAL,
-            complexity=ComplexityLevel.SIMPLE,
-            reasoning="Using qwen2.5-coder:7b",
+            intent=intent,
+            complexity=complexity,
+            reasoning=reasoning,
             temperature=model_config.temperature
         )
     
