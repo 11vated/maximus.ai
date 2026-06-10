@@ -115,6 +115,10 @@ def test_kg_ingest_shape():
     """Smoke shape for ingest bridge (mcp -> mesh). Does not require live MCP server."""
     from maximus.memory.memory_mesh import MemoryMesh
     mesh = MemoryMesh()
-    # Simulate what ingest_knowledge_from_mcp_to_mesh would do
+    # Simulate what ingest_knowledge_from_mcp_to_mesh would do (adds to both semantic + kg)
+    before = len(mesh.knowledge_graph._edges)
     mesh.add_knowledge_triple("test_subject", "test_pred", "test_obj", provenance="mcp:knowledge-graph")
-    assert any("mcp:knowledge-graph" in str(e) for e in mesh.knowledge_graph._edges)
+    assert len(mesh.knowledge_graph._edges) > before
+    # Also lands in semantic with kg tag
+    facts = list(mesh.semantic._facts.values())
+    assert any("knowledge_graph" in (f.tags or []) for f in facts)
