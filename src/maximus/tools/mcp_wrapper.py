@@ -2,6 +2,7 @@
 
 Wraps MCP tools as standard Maximus tools.
 """
+import asyncio
 import logging
 from typing import Any, Dict, List
 
@@ -73,7 +74,7 @@ async def register_mcp_tools() -> List[str]:
     return registered
 
 
-# Hidden gem MCP registration + direct KG ingest bridge (advances Phase D RAG/KG + register-more-gems backlog item).
+# Hidden gem MCP registration + direct KG ingest bridge (advances Phase D RAG/KG + register-more-gems backlog item). Note: fixed async list_tools call to silence warning.
 # See docs/maximus-hidden-gems.md for the 8-9 gems (mcp-knowledge-graph primary for this, plus swarmclaw, sinewaveai security, ragdocs).
 # Once connected (manager.connect_server or npx in user env), tools become available and can feed MemoryMesh.knowledge_graph.
 
@@ -84,7 +85,10 @@ async def register_gem_mcps() -> List[str]:
         try:
             if hasattr(manager, "list_tools"):
                 try:
-                    _ = manager.list_tools(srv)
+                    res = manager.list_tools(srv)
+                    if asyncio.iscoroutine(res):
+                        res = await res  # safe for async managers
+                    _ = res
                 except Exception:
                     pass
             registered.append(srv)
