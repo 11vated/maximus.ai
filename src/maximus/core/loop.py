@@ -153,8 +153,8 @@ Output:"""
         # Initialize MCP Manager for dynamic tool discovery
         self._mcp_manager = None
         self._mcp_initialized = False
-        # Enhanced logging for observable/traceable execution (Langfuse-style)
-        logger.info(f"AgentLoop initialized for goal context, session: {self._session_id}")
+        # Enhanced logging + events for observable/traceable execution (Langfuse-style: states, PRE/POST_TOOL, MCP, safety, router, metrics)
+        logger.info(f"AgentLoop initialized (real MCP, safety pre, router) session: {self._session_id}")
     
     async def _init_mcp_tools(self):
         """Initialize MCP tools and add to registry using unified real implementation."""
@@ -338,6 +338,7 @@ Output:"""
         logger.info(f"Routed to model: {self._current_routing.model} "
                    f"(intent: {self._current_routing.intent.value}, "
                    f"complexity: {self._current_routing.complexity.value})")
+        logger.debug(f"Routing decision: {self._current_routing}")  # full for traces
         
         # Record routing decision in semantic memory
         self.memory.semantic.add_fact(
@@ -418,7 +419,9 @@ Output:"""
                             from maximus.core.safety import get_safety_controller
                             safety = get_safety_controller()
                             safety.layer2_check(tool_call.name, tool_call.arguments, {"session_id": self._session_id})
+                            logger.info(f"PRE_TOOL + layer2 safety passed: {tool_call.name}")
                         except Exception as se:
+                            logger.warning(f"Safety veto PRE_TOOL {tool_call.name}: {se}")
                             result = {"success": False, "error": f"Safety pre-check failed: {se}"}
                         else:
                             # Execute tool with retry
@@ -444,6 +447,7 @@ Output:"""
 
                     if result.get("success"):
                         self.metrics.successful_tool_calls += 1
+                        logger.info(f"POST_TOOL success: {tool_call.name} (turn {self._current_turn})")
                         
                         # Trigger POST_TOOL hook on success
                         await self.hooks.trigger_post(
@@ -456,6 +460,7 @@ Output:"""
                         )
                     else:
                         self.metrics.failed_tool_calls += 1
+                        logger.warning(f"POST_TOOL fail: {tool_call.name} err={result.get('error')}")
                         
                         # Trigger ON_TOOL_ERROR hook on failure
                         await self.hooks.trigger_post(
@@ -498,6 +503,9 @@ Output:"""
                             "success": result.get("success", False)
                         }
                     )
+                    # MCP-aware note for traces (real tools now reach here via registry)
+                    if tool_call.name.startswith("mcp_") or "mcp" in str(tool_call.name).lower():
+                        logger.debug(f"MCP tool executed via real manager: {tool_call.name}")
 
             # Handle LLM response without tool calls (completion)
             elif turn_result.decision == LoopDecision.RESPOND:
