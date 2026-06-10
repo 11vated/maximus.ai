@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 class SandboxConfig:
     """Configuration for sandbox execution."""
     # Isolation level
-    use_docker: bool = True
+    use_docker: bool = False  # Default to reliable local; set True if docker available
     docker_image: str = "maximus-sandbox:latest"
     
     # Resource limits

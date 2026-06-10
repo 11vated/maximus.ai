@@ -20,6 +20,9 @@ from maximus.tools.builtin.system_tools import EnvInfoTool, SystemInfoTool, Crea
 from maximus.tools.builtin.task_tools import TodoWriteTool, TodoReadTool, TaskCreateTool, TaskUpdateTool, TaskStopTool, TaskListTool
 from maximus.tools.builtin.multi_edit import MultiEditTool
 
+# MCP tools (unified real implementation)
+from maximus.tools.mcp_wrapper import register_mcp_tools
+
 # Repo analysis tools
 from maximus.adapters.open_swe_adapter import AnalyzeOpenSweTool
 from maximus.adapters.clawspring_adapter import AnalyzeClawSpringTool
@@ -64,6 +67,14 @@ def register_builtin_tools():
     register_tool(TaskUpdateTool())
     register_tool(TaskStopTool())
     register_tool(TaskListTool())
+
+    # Register MCP tools (real, post unification)
+    try:
+        import asyncio
+        asyncio.run(register_mcp_tools())
+    except Exception as e:
+        logger = __import__('logging').getLogger(__name__)
+        logger.warning(f"MCP tools registration deferred: {e}")
 
 
 def register_repo_tools():
