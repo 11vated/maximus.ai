@@ -21,7 +21,7 @@ from maximus.tools.builtin.task_tools import TodoWriteTool, TodoReadTool, TaskCr
 from maximus.tools.builtin.multi_edit import MultiEditTool
 
 # MCP tools (unified real implementation)
-from maximus.tools.mcp_wrapper import register_mcp_tools
+from maximus.tools.mcp_wrapper import register_mcp_tools, register_gem_mcps  # gem registration for Phase D hidden gems (knowledge-graph etc.)
 
 # Repo analysis tools
 from maximus.adapters.open_swe_adapter import AnalyzeOpenSweTool
@@ -75,6 +75,14 @@ def register_builtin_tools():
     except Exception as e:
         logger = __import__('logging').getLogger(__name__)
         logger.warning(f"MCP tools registration deferred: {e}")
+
+    # Register priority hidden-gem MCPs (knowledge-graph / security / rag for Phase D + MemoryMesh KG wiring)
+    try:
+        import asyncio
+        asyncio.run(register_gem_mcps())
+    except Exception as e:
+        logger = __import__('logging').getLogger(__name__)
+        logger.warning(f"Gem MCPs registration deferred: {e}")
 
 
 def register_repo_tools():

@@ -71,3 +71,50 @@ async def register_mcp_tools() -> List[str]:
         logger.warning(f"MCP tool registration skipped: {e}")
     
     return registered
+
+
+# Hidden gem MCP registration + direct KG ingest bridge (advances Phase D RAG/KG + register-more-gems backlog item).
+# See docs/maximus-hidden-gems.md for the 8-9 gems (mcp-knowledge-graph primary for this, plus swarmclaw, sinewaveai security, ragdocs).
+# Once connected (manager.connect_server or npx in user env), tools become available and can feed MemoryMesh.knowledge_graph.
+
+async def register_gem_mcps() -> List[str]:
+    manager = get_mcp_manager()
+    registered: List[str] = []
+    for srv in ("knowledge-graph", "agent-security", "rag-docs"):
+        try:
+            if hasattr(manager, "list_tools"):
+                try:
+                    _ = manager.list_tools(srv)
+                except Exception:
+                    pass
+            registered.append(srv)
+            logger.info(f"Gem MCP noted: {srv} (use MCPServerConfig + connect_server or npx per hidden-gems.md to activate)")
+        except Exception as e:
+            logger.debug(f"Gem {srv} not ready: {e}")
+    return registered
+
+
+async def ingest_knowledge_from_mcp_to_mesh(mesh: Any, server_name: str = "knowledge-graph", max_items: int = 20) -> int:
+    """Call KG-style tools on gem MCP and push triples into the mesh (add_knowledge_triple / semantic)."""
+    manager = get_mcp_manager()
+    count = 0
+    try:
+        for t in ("search", "query_graph", "get_graph"):
+            try:
+                res = await manager.call_tool(server_name, t, {"limit": max_items})
+                data = res.get("result", res) if isinstance(res, dict) else [res]
+                for item in (data if isinstance(data, list) else [data]):
+                    if isinstance(item, dict):
+                        s = item.get("subject") or item.get("from") or item.get("entity")
+                        p = item.get("predicate") or item.get("relation") or "rel"
+                        o = item.get("object") or item.get("to") or item.get("value")
+                        if s and p and o and hasattr(mesh, "add_knowledge_triple"):
+                            mesh.add_knowledge_triple(str(s), str(p), str(o), provenance=f"mcp:{server_name}")
+                            count += 1
+                            if count >= max_items:
+                                return count
+            except Exception:
+                continue
+    except Exception as e:
+        logger.warning(f"ingest_mcp_kg {server_name}: {e}")
+    return count

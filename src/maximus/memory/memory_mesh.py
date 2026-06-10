@@ -414,6 +414,7 @@ class MemoryMesh:
         self.semantic = SemanticMemory()
         self.procedural = ProceduralMemory()
         self.working = WorkingMemory()
+        self.knowledge_graph = KnowledgeGraphMemory()  # Phase D: KG for mcp-knowledge-graph / Graphiti cross
         
         # Persistent memory
         self.memdir = Memdir(project_path) if project_path else None
@@ -475,7 +476,7 @@ class MemoryMesh:
         return results[:query.limit]
 
     def to_context(self) -> str:
-        """Get full context from all banks."""
+        """Get full context from all banks (includes KG for RAG/Graphiti)."""
         context_parts = []
         
         # Working memory (most important - current task)
@@ -491,6 +492,12 @@ class MemoryMesh:
         # Procedural (patterns)
         context_parts.append(self.procedural.to_context())
         
+        # KG (new)
+        if hasattr(self, "knowledge_graph") and self.knowledge_graph:
+            kgc = self.knowledge_graph.to_context()
+            if kgc and "No knowledge" not in kgc:
+                context_parts.append(kgc)
+        
         return "\n\n".join(context_parts)
 
     def checkpoint(self) -> None:
@@ -500,3 +507,82 @@ class MemoryMesh:
     def restore(self, idx: int = -1) -> bool:
         """Restore to checkpoint."""
         return self.working.restore(idx)
+# KnowledgeGraphMemory + helpers appended for Phase D (RAG/KG wiring to MemoryMesh + gem MCPs)
+# This makes self.knowledge_graph work and provides add_knowledge_triple / query on instances.
+
+@dataclass
+class KGNode:
+    id: str
+    type: str = "concept"
+    properties: Dict[str, Any] = field(default_factory=dict)
+    layer: Optional[str] = None
+    timestamp: datetime = field(default_factory=datetime.now)
+
+
+class KnowledgeGraphMemory:
+    """Local KG implementing Graphiti / mcp-knowledge-graph patterns for MemoryMesh.
+    Nodes + relations. Ingest via ingest_knowledge_from_mcp_to_mesh or direct add_relation.
+    """
+    def __init__(self):
+        self._nodes: Dict[str, KGNode] = {}
+        self._edges: List[Dict[str, Any]] = []
+
+    def add_node(self, node_id: str, node_type: str = "concept", properties: Optional[Dict] = None, layer: Optional[str] = None) -> KGNode:
+        node = KGNode(id=node_id, type=node_type, properties=properties or {}, layer=layer)
+        self._nodes[node_id] = node
+        return node
+
+    def add_relation(self, subject: str, predicate: str, obj: str, properties: Optional[Dict] = None, layer: Optional[str] = None) -> Dict[str, Any]:
+        if subject not in self._nodes:
+            self.add_node(subject, layer=layer)
+        if obj not in self._nodes:
+            self.add_node(obj, layer=layer)
+        edge = {"from": subject, "to": obj, "relation": predicate, "properties": properties or {}, "layer": layer, "timestamp": datetime.now()}
+        self._edges.append(edge)
+        return edge
+
+    def query_related(self, query: str, limit: int = 10, relation: Optional[str] = None) -> List[Dict[str, Any]]:
+        q = query.lower()
+        out: List[Dict[str, Any]] = []
+        for edge in self._edges:
+            if relation and edge.get("relation") != relation: continue
+            if q in str(edge.get("from","")).lower() or q in str(edge.get("to","")).lower() or q in str(edge.get("relation","")).lower():
+                out.append({"type": "edge", **edge})
+                if len(out) >= limit: break
+        for nid, node in list(self._nodes.items()):
+            if q in nid.lower() or q in (node.type or "").lower():
+                out.append({"type": "node", "id": nid, "node_type": node.type, "props": node.properties, "layer": node.layer})
+                if len(out) >= limit: break
+        return out[:limit]
+
+    def to_context(self) -> str:
+        if not self._edges and not self._nodes:
+            return "No knowledge graph entries yet."
+        lines = ["## Knowledge Graph (triples/relations from mcp gems)"]
+        for e in self._edges[-8:]:
+            lines.append(f"- ({e.get('from')}) -[{e.get('relation')}]-> ({e.get('to')})")
+        lines.append(f"Nodes: {len(self._nodes)} | Edges: {len(self._edges)}")
+        return "\n".join(lines)
+
+
+# Bind helpers as methods on MemoryMesh (so self.add_knowledge_triple etc work after import)
+def _mm_add_knowledge_triple(self, subject: str, predicate: str, obj: str, layer: Optional[KnowledgeLayer] = KnowledgeLayer.DOMAIN, tags: Optional[List[str]] = None, provenance: str = "kg-mcp"):
+    value = f"{subject} {predicate} {obj}"
+    entry = self.add(key=f"kg:{subject}:{predicate}:{obj}"[:200], value=value, bank=MemoryBank.SEMANTIC, layer=layer, tags=(tags or []) + ["knowledge_graph", "triple"], provenance=provenance)
+    if hasattr(self, "knowledge_graph") and self.knowledge_graph:
+        self.knowledge_graph.add_relation(subject, predicate, obj, layer=layer.value if layer else None)
+    return entry
+
+def _mm_query_knowledge_graph(self, query: str, limit: int = 10):
+    results: List[Dict[str, Any]] = []
+    if hasattr(self, "knowledge_graph") and self.knowledge_graph:
+        results.extend(self.knowledge_graph.query_related(query, limit=limit))
+    for entry in self.semantic._facts.values():
+        if "knowledge_graph" in (getattr(entry, "tags", []) or []) or query.lower() in (entry.value or "").lower():
+            results.append({"type": "fact", "key": entry.key, "value": entry.value, "layer": entry.layer.value if entry.layer else None})
+            if len(results) >= limit: break
+    return results[:limit]
+
+MemoryMesh.add_knowledge_triple = _mm_add_knowledge_triple
+MemoryMesh.query_knowledge_graph = _mm_query_knowledge_graph
+
