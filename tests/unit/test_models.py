@@ -122,3 +122,43 @@ def test_kg_ingest_shape():
     # Also lands in semantic with kg tag
     facts = list(mesh.semantic._facts.values())
     assert any("knowledge_graph" in (f.tags or []) for f in facts)
+
+
+def test_evals_harness_smoke():
+    """Basic harness smoke for agent cycle (states, KG, router, sandbox, MCP). Starts evals/benchmarks per Medium backlog."""
+    from maximus.core.loop import CognitiveState
+    from maximus.memory.memory_mesh import MemoryMesh, KnowledgeLayer
+    from maximus.intelligence.model_router import get_model_router
+    from maximus.sandbox.factory import get_sandbox, SandboxConfig, SandboxType
+    from maximus.tools.mcp_wrapper import register_gem_mcps
+    import asyncio
+
+    # Core 8-state
+    assert len(list(CognitiveState)) == 8
+
+    # KG integration (Phase D)
+    mesh = MemoryMesh()
+    entry = mesh.add_knowledge_triple("EvalHarness", "covers", "Cycle+KG+MCP", layer=KnowledgeLayer.INTENT, tags=["evals", "harness"])
+    assert entry is not None
+    assert len(mesh.knowledge_graph._edges) >= 1
+    q = mesh.query_knowledge_graph("EvalHarness")
+    assert len(q) >= 1
+
+    # Router (deterministic part of cycle)
+    router = get_model_router()
+    dec = router.route("Run evals harness smoke test for loop and memory")
+    assert dec.recommended_model
+    assert dec.intent
+
+    # Sandbox (local reliable + docker opt-in)
+    sb_local = get_sandbox(SandboxConfig(sandbox_type=SandboxType.LOCAL))
+    assert sb_local is not None
+    sb_docker = get_sandbox(SandboxConfig(sandbox_type=SandboxType.DOCKER))  # should init gracefully
+    assert sb_docker is not None
+
+    # MCP gem registration (fixed, for hidden gems)
+    gems = asyncio.run(register_gem_mcps())
+    assert isinstance(gems, list)
+    assert len(gems) >= 1
+
+    print("Evals harness smoke: states, KG, router, sandbox, MCP covered (harness started)")
