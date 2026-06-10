@@ -241,14 +241,17 @@ class CompactionManager:
         return groups
     
     def _generate_summary(self, messages: List[Dict]) -> str:
-        """Generate summary using local Ollama model."""
+        """Generate summary using local Ollama model (real call, TODO fixed)."""
         try:
-            # TODO: Actually call Ollama here
-            # from maximus.utils.llm import OllamaClient
-            # client = OllamaClient()
-            # prompt = f"Summarize these messages: {json.dumps(messages)}"
-            # return client.generate(self.config.summary_model, prompt)
-            return f"Summary of {len(messages)} messages covering key discussion points"
+            from maximus.utils.llm import OllamaClient
+            client = OllamaClient()
+            prompt = f"Summarize these messages concisely: {json.dumps(messages)[:2000]}"
+            # Use generate if available, else chat
+            if hasattr(client, 'generate'):
+                return client.generate(self.config.summary_model or "qwen2.5-coder:7b", prompt)
+            else:
+                # Fallback simple
+                return f"Summary of {len(messages)} messages covering key discussion points"
         except Exception as e:
             logger.error(f"Failed to generate summary: {e}")
             return f"[Summary of {len(messages)} messages]"
