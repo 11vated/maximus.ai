@@ -153,6 +153,8 @@ Output:"""
         # Initialize MCP Manager for dynamic tool discovery
         self._mcp_manager = None
         self._mcp_initialized = False
+        # Enhanced logging for observable/traceable execution (Langfuse-style)
+        logger.info(f"AgentLoop initialized for goal context, session: {self._session_id}")
     
     async def _init_mcp_tools(self):
         """Initialize MCP tools and add to registry using unified real implementation."""
